@@ -1,0 +1,146 @@
+{# Swappable body of the week view. Mutation endpoints return this partial,
+   replacing the #week-main wrapper via hx-target / hx-swap="outerHTML".
+   Header + capture bar live in week.html (parent) so they don't get re-rendered. #}
+
+{%- macro tag_pill(name, color) -%}
+  {%- set palette = {
+    "red":    "bg-red-50 text-red-900",
+    "teal":   "bg-teal-50 text-teal-900",
+    "indigo": "bg-indigo-50 text-indigo-900",
+    "slate":  "bg-slate-100 text-slate-700",
+    "amber":  "bg-amber-50 text-amber-900",
+    "pink":   "bg-pink-50 text-pink-900",
+  } -%}
+  <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full {{ palette.get(color, palette['slate']) }}">{{ name }}</span>
+{%- endmacro -%}
+
+{%- macro status_button(task, accent_hex, year_week, slug) -%}
+  <button
+    type="button"
+    hx-post="/w/{{ slug }}/week/{{ year_week }}/tasks/{{ task.id }}/complete"
+    hx-target="#week-main"
+    hx-swap="outerHTML"
+    aria-label="{{ 'Reopen' if task.status == 'completed' else 'Complete' }} task"
+    class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full flex-shrink-0 transition-colors hover:opacity-80 cursor-pointer p-0 border-0 bg-transparent"
+    {% if task.status != 'completed' %}style="border: 1.5px solid #94a3b8;"{% endif %}>
+    {%- if task.status == 'completed' -%}
+      <span class="inline-flex w-3.5 h-3.5 rounded-full items-center justify-center text-white text-[8px] leading-none" style="background: {{ accent_hex }}; border: 1.5px solid {{ accent_hex }};">✓</span>
+    {%- endif -%}
+  </button>
+{%- endmacro -%}
+
+<div id="week-main">
+
+  {# --- Today strip --- #}
+  <div class="px-4 pt-3.5 pb-3">
+    <div class="flex items-center justify-between mb-2">
+      <div class="flex items-center gap-2">
+        <span class="text-[11px] font-medium uppercase tracking-wider text-slate-600">Today</span>
+        <span class="text-[11px] text-slate-400">{{ today_date_label }}</span>
+      </div>
+      <span class="text-[11px] text-slate-400">{{ today_done_count }} / {{ today_total_count }} done · press <code class="bg-slate-100 px-1 rounded text-slate-600">t</code> on a row to add</span>
+    </div>
+    {% if today_tasks %}
+      <div class="grid grid-cols-3 gap-2">
+        {% for task in today_tasks %}
+          <div class="bg-white border border-slate-200 rounded-md p-2.5" style="border-left: 2px solid {{ workspace.color_hex }};">
+            <div class="flex items-start gap-2">
+              {{ status_button(task, workspace.color_hex, year_week, workspace.slug) }}
+              <div class="flex-1 min-w-0 {% if task.status == 'completed' %}opacity-55{% endif %}">
+                <div class="text-[13px] font-medium leading-snug {% if task.status == 'completed' %}line-through{% endif %}">{{ task.title }}</div>
+                <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  {% for tag in task.tags %}{{ tag_pill(tag.name, tag.color) }}{% endfor %}
+                  {% if task.estimate_hours %}<span class="text-[11px] text-slate-400">~{{ task.estimate_label }}</span>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-[12px] text-slate-400 italic px-1">No tasks chosen for today yet. Click <code class="bg-slate-100 px-1 rounded text-slate-600">+ today</code> on any week task.</p>
+    {% endif %}
+  </div>
+
+  {# --- Two-column: week list + inbox --- #}
+  <div class="grid grid-cols-[1fr_220px] border-t border-slate-200">
+
+    <div class="p-3 border-r border-slate-200">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[11px] font-medium uppercase tracking-wider text-slate-600">This week</span>
+        <span class="text-[11px] text-slate-400">{{ stats.open + stats.done }} task{{ '' if (stats.open + stats.done) == 1 else 's' }}</span>
+      </div>
+      <div class="flex flex-col">
+        {% for task in week_tasks %}
+          <div class="group grid grid-cols-[18px_1fr_auto_auto_auto] gap-2.5 items-center px-1 py-1.5 border-b border-slate-100 hover:bg-slate-50 {% if task.status == 'completed' %}opacity-60{% endif %}">
+            {{ status_button(task, workspace.color_hex, year_week, workspace.slug) }}
+            <div class="min-w-0">
+              <div class="text-[13px] {% if task.status == 'completed' %}line-through{% endif %}">{{ task.title }}</div>
+              {% if task.tags or task.project %}
+                <div class="flex gap-1.5 mt-0.5 items-center flex-wrap">
+                  {% for tag in task.tags %}{{ tag_pill(tag.name, tag.color) }}{% endfor %}
+                  {% if task.project %}<span class="text-[11px] text-slate-400">@{{ task.project }}</span>{% endif %}
+                </div>
+              {% endif %}
+            </div>
+            <span class="text-[11px] text-slate-400 tabular-nums">{% if task.estimate_hours %}{{ task.estimate_label }}{% endif %}</span>
+            <button
+              type="button"
+              hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/today"
+              hx-target="#week-main"
+              hx-swap="outerHTML"
+              aria-label="{{ 'Remove from today' if task.is_today else 'Add to today' }}"
+              class="text-[10px] font-medium px-1.5 py-0.5 rounded {% if task.is_today %}opacity-100{% else %}opacity-0 group-hover:opacity-60 hover:opacity-100{% endif %}"
+              style="color: {{ workspace.color_hex }};">
+              {% if task.is_today %}★ today{% else %}+ today{% endif %}
+            </button>
+            <button
+              type="button"
+              hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/delete"
+              hx-target="#week-main"
+              hx-swap="outerHTML"
+              hx-confirm="Delete '{{ task.title }}'?"
+              aria-label="Delete task"
+              class="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 text-sm leading-none px-1">×</button>
+          </div>
+        {% else %}
+          <p class="text-[12px] text-slate-400 italic px-1 py-2">Nothing scheduled this week. Type something into the capture bar above.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# --- Inbox --- #}
+    <div class="p-3 bg-slate-50">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[11px] font-medium uppercase tracking-wider text-slate-600">Inbox</span>
+        <span class="text-[11px] text-slate-400">{{ inbox_count }}</span>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        {% for task in inbox_tasks %}
+          <button
+            type="button"
+            hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/schedule"
+            hx-target="#week-main"
+            hx-swap="outerHTML"
+            title="Schedule into the viewed week"
+            class="bg-white border border-slate-200 rounded-md px-2.5 py-1.5 text-[12px] leading-snug text-left hover:border-slate-400 hover:shadow-sm transition group flex items-center justify-between gap-2 cursor-pointer">
+            <span class="min-w-0 truncate">{{ task.title }}</span>
+            <span class="text-slate-400 group-hover:text-slate-600 text-[11px] flex-shrink-0">→</span>
+          </button>
+        {% else %}
+          <p class="text-[11px] text-slate-400 italic px-1 py-2">Inbox empty.</p>
+        {% endfor %}
+      </div>
+      <div class="mt-2.5 text-[11px] text-slate-400">Click any inbox item to schedule it into this week</div>
+    </div>
+  </div>
+
+  {# --- Stats footer --- #}
+  <div class="flex gap-5 px-4 py-2 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-600">
+    <span>Open <strong class="text-slate-900 font-medium ml-0.5">{{ stats.open }}</strong></span>
+    <span>Done <strong class="text-slate-900 font-medium ml-0.5">{{ stats.done }}</strong></span>
+    <span>Estimated <strong class="text-slate-900 font-medium ml-0.5">{{ stats.estimated_hours }}h</strong></span>
+    <span>Logged <strong class="text-slate-900 font-medium ml-0.5">{{ stats.logged_hours }}h</strong></span>
+    <span class="ml-auto text-slate-400">{{ stats.percent_complete }}% complete</span>
+  </div>
+</div>

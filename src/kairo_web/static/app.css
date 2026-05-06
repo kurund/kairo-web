@@ -1,0 +1,3 @@
+/* Placeholder. Replaced by Tailwind CLI output in a later milestone.
+   For the scaffold, the templates load Tailwind classes from CDN-style usage
+   would need a build step; we ship this file empty so the static mount works. */

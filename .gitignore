@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# uv — lock file IS committed for reproducible installs.
+.uv/
+
+# Tooling caches
+.pytest_cache/
+pytest-cache-files-*/
+.ruff_cache/
+.mypy_cache/
+
+# Environment — commit only the example.
+.env
+.env.*
+!.env.example
+
+# Local databases / data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+dev.db
+backups/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Coverage / profiling
+.coverage
+.coverage.*
+htmlcov/

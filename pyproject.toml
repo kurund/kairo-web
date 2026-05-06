@@ -1,0 +1,64 @@
+[project]
+name = "kairo-web"
+version = "0.1.0"
+description = "Kairo Web — single-user weekly task manager (FastAPI + SQLite + HTMX)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "Kurund Jalmi" }]
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlmodel>=0.0.22",
+    "alembic>=1.13.3",
+    "jinja2>=3.1.4",
+    "pydantic[email]>=2.9.2",
+    "pydantic-settings>=2.6.1",
+    "itsdangerous>=2.2.0",
+    "apscheduler>=3.10.4",
+    "resend>=2.4.0",
+    "python-multipart>=0.0.17",
+    "html2text>=2024.2.26",
+    "structlog>=24.4.0",
+    "click>=8.1.7",
+    "python-dateutil>=2.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.2",
+    "ruff>=0.7.4",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.1",
+]
+
+[project.scripts]
+kairo-web = "kairo_web.cli:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kairo_web"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.10"
+strict_optional = true
+warn_unused_ignores = true

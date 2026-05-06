@@ -1,0 +1,7 @@
+# /etc/caddy/Caddyfile
+# Replace `kairo.example.com` with the hostname you own.
+# Caddy will fetch + renew a Let's Encrypt cert automatically.
+kairo.example.com {
+    reverse_proxy 127.0.0.1:8001
+    encode zstd gzip
+}
