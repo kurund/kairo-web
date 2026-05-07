@@ -59,7 +59,7 @@ def _ws_id(slug: str) -> int:
 def test_root_redirects_to_current_week(client: TestClient) -> None:
     r = client.get("/", follow_redirects=False)
     assert r.status_code == 302
-    assert r.headers["location"].startswith("/w/fulltime/week/")
+    assert r.headers["location"].startswith("/w/personal/week/")
 
 
 def test_week_page_renders(client: TestClient) -> None:

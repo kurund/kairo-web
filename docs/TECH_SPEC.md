@@ -94,10 +94,11 @@ SQLite database at `/var/lib/kairo-web/kairo.db` (production) or `./dev.db` (loc
 ### 3.1 Tables
 
 ```sql
--- Workspaces are fixed at install time but stored in DB for forward compatibility.
+-- Workspaces are user-defined. `kairo-web init` seeds 'personal'; users add
+-- more via `kairo-web add-workspace`. Schema is open: any slug is allowed.
 CREATE TABLE workspace (
   id INTEGER PRIMARY KEY,
-  slug TEXT UNIQUE NOT NULL,        -- 'fulltime', 'consulting', 'personal'
+  slug TEXT UNIQUE NOT NULL,        -- e.g. 'personal', 'work', 'consulting'
   name TEXT NOT NULL,
   color TEXT NOT NULL,              -- hex, used in UI accents
   morning_digest_enabled INTEGER NOT NULL DEFAULT 1,

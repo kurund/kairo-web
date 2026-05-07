@@ -36,10 +36,11 @@ class TaskTag(SQLModel, table=True):
 
 
 class Workspace(SQLModel, table=True):
-    """Top-level container: Full-time / Consulting / Personal.
+    """Top-level container — a fully isolated namespace for tasks/tags/projects.
 
-    Workspaces are seeded at install time (`kairo-web init`) but stored in the
-    DB so digest preferences and metadata can evolve without code changes.
+    `kairo-web init` seeds a single 'personal' workspace; users add more via
+    `kairo-web add-workspace`. Each workspace's accent color is stored here
+    (the badge bg + text colors are derived from it via HSL math at render time).
     """
 
     __tablename__ = "workspace"

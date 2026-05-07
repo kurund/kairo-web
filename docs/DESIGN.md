@@ -60,11 +60,15 @@ The dominant failure mode is "I forgot the app existed." The dominant success cr
 
 ## 6. Workspaces
 
-Three workspaces: **Full-time**, **Consulting**, **Personal**. Each is a fully isolated namespace — its own tasks, projects, tags, weekly plans, statistics. A top-bar dropdown switches between them; keyboard shortcuts `1` / `2` / `3` jump directly. Active workspace is persisted in a session cookie and reflected in the URL (`/w/personal/...`).
+Workspaces are user-defined and unbounded in number. **`kairo-web init` seeds a single `personal` workspace**; users add others (`work`, `consulting`, `side-project`, etc.) via `kairo-web add-workspace --slug=<slug> --name="<name>"`. Each workspace is a fully isolated namespace — its own tasks, projects, tags, weekly plans, statistics — selected via a top-bar switcher and reflected in the URL (`/w/<slug>/...`).
 
-Workspaces do **not** share tasks. If the user wants a "global today" view across all three, that is an explicit v1.1 feature (see §11), not the default.
+Workspaces do **not** share tasks. If a user wants a "global today" view across workspaces, that is an explicit v1.1 feature (see §11), not the default.
 
-The workspace dropdown shows badge counts: "Full-time · 4 due this week", "Personal · 2 overdue". This nudges the user to switch when something needs attention.
+Each workspace has an accent color (a single hex stored on `workspace.color`) used for its tab underline, today-card left border, and "★ today" indicator. The `add-workspace` CLI auto-picks a color from a built-in palette by current workspace count, with a `--color=#hex` override. The badge background and text color are derived from the accent via HSL math, so any hex input produces a coherent set of three.
+
+The workspace switcher shows badge counts: "Work · 4 due this week", "Personal · 2 overdue". This nudges users to switch when something needs attention.
+
+A planned keyboard shortcut maps `1`–`9` to the first nine workspaces by display order; with arbitrary workspace counts the shortcut is no longer guaranteed to cover everything (see §11.2 open questions).
 
 ---
 
@@ -158,7 +162,7 @@ The evening email is the keystone habit-builder. Even a user who never opens the
 
 | Area | Feature |
 |---|---|
-| Workspaces | Three fixed workspaces (Full-time / Consulting / Personal); switcher; per-workspace data isolation |
+| Workspaces | User-defined; `init` seeds 'personal'; `add-workspace` CLI for more; switcher; per-workspace data isolation |
 | Tasks | CRUD; title, description, tags (multi), project (single), estimate (hours), status, position |
 | Planning | ISO-week view; prev/today/next navigation; inbox; Today strip |
 | Ordering | Position-based, manual reorder via `J`/`K` |
@@ -210,7 +214,7 @@ We are not building this to measure it, but a habit-formation product needs a fe
 ### Still open
 
 1. **Which workspace receives v1 tasks?** — the migration script takes `--workspace` at runtime, so we don't need to decide until we run it. Default suggestion: `fulltime`, since v1 usage skewed toward work.
-2. **Cross-workspace today view** — should v1.1 add a `/today` page that aggregates the Today strip from all three workspaces? Risks blurring the workspace walls.
+2. **Cross-workspace today view** — should v1.1 add a `/today` page that aggregates the Today strip across all workspaces? Risks blurring the workspace walls.
 3. **Inbox per workspace vs global inbox** — current design has inbox per workspace. A global inbox could be the place where uncategorized captures land before being routed. Worth piloting after MVP.
 4. **Mobile capture** — the web app will work on mobile, but is a true PWA install (with home-screen icon) worth the small extra build cost? Probably yes.
 

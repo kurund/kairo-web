@@ -1,4 +1,12 @@
-"""Populate the dev DB with a few sample tasks. Run after `kairo-web init`."""
+"""Populate the dev DB with a few sample tasks. Run after `kairo-web init`.
+
+Only seeds workspaces that already exist. By default `init` creates 'personal',
+so out of the box only those tasks get seeded. To seed the 'fulltime' and
+'consulting' samples too, create those workspaces first:
+
+    kairo-web add-workspace --slug=fulltime --name="Full-time"
+    kairo-web add-workspace --slug=consulting --name="Consulting"
+"""
 
 from __future__ import annotations
 
@@ -52,12 +60,15 @@ def main() -> None:
         ],
     }
 
+    seeded: list[str] = []
+    skipped: list[str] = []
     with Session(engine) as session:
         for slug, samples in plan.items():
             ws = session.exec(select(Workspace).where(Workspace.slug == slug)).first()
             if not ws or ws.id is None:
-                print(f"workspace '{slug}' missing — run `kairo-web init` first")
+                skipped.append(slug)
                 continue
+            seeded.append(slug)
             for i, (title, tag_names, estimate, is_today, project, status) in enumerate(samples):
                 task = Task(
                     workspace_id=ws.id,
@@ -96,7 +107,13 @@ def main() -> None:
                     )
                 )
         session.commit()
-    print(f"seeded dev tasks for ISO week {iso_year}-W{iso_week:02d}.")
+
+    if seeded:
+        print(f"seeded {len(seeded)} workspace(s) for ISO week {iso_year}-W{iso_week:02d}: "
+              + ", ".join(seeded))
+    if skipped:
+        print(f"skipped (workspace not found): {', '.join(skipped)}")
+        print("  → add with `kairo-web add-workspace --slug=<slug> --name=<name>`")
 
 
 if __name__ == "__main__":

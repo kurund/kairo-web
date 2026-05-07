@@ -1,15 +1,18 @@
 """Command-line interface for Kairo Web.
 
 Subcommands:
-  init           Seed workspaces and the owner user.
-  migrate-v1     Import tasks from Kairo v1's SQLite database.
-  rollover       Manually trigger Sunday-night rollover for all workspaces.
+  init             Seed the default 'personal' workspace and the owner user.
+  add-workspace    Create an additional workspace.
+  list-workspaces  Show all workspaces and their accent colors.
+  migrate-v1       Import tasks from Kairo v1's SQLite database.
+  rollover         Manually trigger Sunday-night rollover for all workspaces.
 
 Run `kairo-web --help` to see usage.
 """
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 
@@ -19,13 +22,12 @@ from sqlmodel import Session, select
 from kairo_web.config import get_settings
 from kairo_web.db import engine
 from kairo_web.models import Tag, Task, TaskTag, User, Workspace, utcnow
+from kairo_web.workspace_meta import DEFAULT_PALETTE, color_for_index
 
-# Default workspace seeds — slug, display name, accent color (hex).
-DEFAULT_WORKSPACES = [
-    ("fulltime", "Full-time", "#0f766e"),
-    ("consulting", "Consulting", "#7c3aed"),
-    ("personal", "Personal", "#db2777"),
-]
+# Single seed workspace. Users add more via `kairo-web add-workspace`.
+_INITIAL_WORKSPACE = ("personal", "Personal", DEFAULT_PALETTE[0])  # pink-700
+
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 
 @click.group()
@@ -39,17 +41,18 @@ def cli() -> None:
 
 @cli.command()
 def init() -> None:
-    """Seed the three default workspaces and the owner user.
+    """Seed the default 'personal' workspace and the owner user.
 
-    Idempotent: existing rows are left untouched.
+    Idempotent: existing rows are left untouched. Add more workspaces with
+    `kairo-web add-workspace --slug=<slug> --name="<name>"`.
     """
     settings = get_settings()
+    slug, name, color = _INITIAL_WORKSPACE
     with Session(engine) as session:
-        for slug, name, color in DEFAULT_WORKSPACES:
-            existing = session.exec(select(Workspace).where(Workspace.slug == slug)).first()
-            if existing:
-                click.echo(f"workspace '{slug}' already exists — skipping")
-                continue
+        existing = session.exec(select(Workspace).where(Workspace.slug == slug)).first()
+        if existing:
+            click.echo(f"workspace '{slug}' already exists — skipping")
+        else:
             session.add(Workspace(slug=slug, name=name, color=color))
             click.echo(f"created workspace '{slug}' ({name})")
 
@@ -62,6 +65,66 @@ def init() -> None:
 
         session.commit()
     click.echo("init complete.")
+
+
+# ----- add-workspace ------------------------------------------------------
+
+
+@cli.command("add-workspace")
+@click.option(
+    "--slug",
+    required=True,
+    help="URL-safe identifier (lowercase, [a-z0-9_-]). Used in /w/<slug>/...",
+)
+@click.option("--name", required=True, help="Display name shown in the workspace switcher.")
+@click.option(
+    "--color",
+    default=None,
+    help="Accent color as a hex like '#0F766E'. Defaults to the next slot in the palette.",
+)
+def add_workspace(slug: str, name: str, color: str | None) -> None:
+    """Create a new workspace.
+
+    Examples:
+      kairo-web add-workspace --slug=work --name="Work"
+      kairo-web add-workspace --slug=consulting --name="Consulting" --color=#4338CA
+    """
+    if not _SLUG_RE.fullmatch(slug):
+        raise click.ClickException(
+            "slug must be lowercase, start with a letter or digit, and contain only "
+            "letters, digits, hyphens, or underscores"
+        )
+
+    with Session(engine) as session:
+        existing = session.exec(select(Workspace).where(Workspace.slug == slug)).first()
+        if existing:
+            raise click.ClickException(f"workspace '{slug}' already exists")
+
+        if color is None:
+            n = len(list(session.exec(select(Workspace)).all()))
+            color = color_for_index(n)
+
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
+            raise click.ClickException("color must look like '#RRGGBB' (six hex digits)")
+
+        session.add(Workspace(slug=slug, name=name, color=color))
+        session.commit()
+    click.echo(f"created workspace '{slug}' ({name}) with accent {color}")
+
+
+# ----- list-workspaces ----------------------------------------------------
+
+
+@cli.command("list-workspaces")
+def list_workspaces() -> None:
+    """Print all workspaces."""
+    with Session(engine) as session:
+        rows = list(session.exec(select(Workspace).order_by(Workspace.id)).all())
+    if not rows:
+        click.echo("no workspaces yet — run `kairo-web init` to create the default 'personal'")
+        return
+    for w in rows:
+        click.echo(f"  {w.slug:20} {w.name:24} {w.color}")
 
 
 # ----- migrate-v1 ---------------------------------------------------------
@@ -78,9 +141,8 @@ def init() -> None:
 @click.option(
     "--workspace",
     "workspace_slug",
-    type=click.Choice([w[0] for w in DEFAULT_WORKSPACES]),
     required=True,
-    help="Target workspace for the imported tasks.",
+    help="Target workspace slug (must already exist; create it first with add-workspace).",
 )
 @click.option("--dry-run", is_flag=True, help="Print a summary without writing anything.")
 def migrate_v1(source: Path, workspace_slug: str, dry_run: bool) -> None:

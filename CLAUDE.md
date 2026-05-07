@@ -8,7 +8,7 @@ Kairo Web is a single-user weekly task manager — a web evolution of the v1 ter
 
 **Always read these before non-trivial changes:**
 
-- [`docs/DESIGN.md`](./docs/DESIGN.md) — product motivation, three-workspace model, primary screen, email digest, MVP/v1.1/v2 feature breakdown.
+- [`docs/DESIGN.md`](./docs/DESIGN.md) — product motivation, workspace model, primary screen, email digest, MVP/v1.1/v2 feature breakdown.
 - [`docs/TECH_SPEC.md`](./docs/TECH_SPEC.md) — full stack, schema, route inventory, auth flow, capture-parser grammar, Hostinger VPS deploy recipe.
 
 These are the source of truth. If a change contradicts them, update the docs in the same change.
@@ -19,10 +19,12 @@ These are the source of truth. If a change contradicts them, update the docs in 
 # Install (Python 3.10+; production targets 3.12).
 uv sync --all-extras
 
-# First-time: configure env, set up DB, seed workspaces + owner user.
+# First-time: configure env, set up DB, seed default workspace + owner user.
 cp .env.example .env  # then set KAIRO_SECRET_KEY
 uv run alembic upgrade head
 uv run kairo-web init
+# Optionally add more workspaces:
+uv run kairo-web add-workspace --slug=work --name="Work"
 
 # Run.
 uv run uvicorn kairo_web.main:app --reload --port 8001
@@ -32,9 +34,11 @@ uv run pytest                 # 32 tests (19 capture parser + 13 routes)
 
 # CLI.
 uv run kairo-web --help
-uv run kairo-web init                                # idempotent
-uv run kairo-web migrate-v1 --workspace fulltime     # import from ~/.kairo/tasks.db
-uv run kairo-web migrate-v1 --workspace fulltime --dry-run
+uv run kairo-web init                                  # idempotent (seeds 'personal')
+uv run kairo-web add-workspace --slug=work --name="Work"
+uv run kairo-web list-workspaces
+uv run kairo-web migrate-v1 --workspace personal       # import from ~/.kairo/tasks.db
+uv run kairo-web migrate-v1 --workspace personal --dry-run
 
 # Lint / format.
 uv run ruff check src tests
@@ -55,7 +59,7 @@ src/kairo_web/
   models.py          # SQLModel data classes (table=True)
   paths.py           # PACKAGE_DIR, TEMPLATE_DIR, STATIC_DIR
   utils.py           # iso-week math, tag color picker, hour formatting
-  workspace_meta.py  # per-slug accent colors (hex), shared by routes + templates
+  workspace_meta.py  # color palette + HSL math (derive bg/fg from accent hex)
   cli.py             # Click CLI: init, migrate-v1, rollover
   routes/
     pages.py         # GET /, /login, /w/{slug}/week/{ywk}, /preview
@@ -112,7 +116,7 @@ The reusable context-builder is `routes/tasks.py::_build_partial_context()`. Pag
 
 ### Workspaces are walls, not filters
 
-Each workspace is a fully isolated namespace — its own tasks, tags, projects, weekly plans. Cross-workspace queries should be rare and explicit (only the badge-count query in `queries.get_workspace_badges` aggregates across workspaces).
+Each workspace is a fully isolated namespace — its own tasks, tags, projects, weekly plans. Cross-workspace queries should be rare and explicit (only the badge-count query in `queries.get_workspace_badges` aggregates across workspaces). Workspace count is unbounded — `init` seeds 'personal'; the user adds more via `kairo-web add-workspace`.
 
 ### Position-based ordering — NOT priority
 
@@ -130,7 +134,7 @@ Tasks have a `position` integer field, auto-assigned `MAX(position) + 1` per `(w
 
 ### Tag scope is per-workspace
 
-Tags are scoped per workspace — `Personal/urgent ≠ Full-time/urgent`. Enforced by `UNIQUE (workspace_id, name)`. The `_ensure_tags` helper in `routes/tasks.py` does find-or-create.
+Tags are scoped per workspace — `personal/urgent ≠ work/urgent`. Enforced by `UNIQUE (workspace_id, name)`. The `_ensure_tags` helper in `routes/tasks.py` does find-or-create.
 
 ### Tag colors
 
@@ -174,7 +178,7 @@ When adding a new table or column:
 ### Testing
 
 - `tests/test_capture.py` — pure function tests.
-- `tests/test_routes.py` — FastAPI `TestClient` against an in-memory SQLite. The `fresh_db` fixture drops + recreates schema per test using `SQLModel.metadata` (skipping Alembic) and seeds the three default workspaces.
+- `tests/test_routes.py` — FastAPI `TestClient` against an in-memory SQLite. The `fresh_db` fixture drops + recreates schema per test using `SQLModel.metadata` (skipping Alembic) and seeds three workspaces (fulltime/consulting/personal) — purely so the tests can exercise multi-workspace behavior; production seeds only 'personal' via `kairo-web init`.
 - Run a single test: `uv run pytest tests/test_routes.py::test_capture_creates_task_with_tags_project_estimate -v`
 - No async tests yet (`asyncio_mode = "auto"` is set but unused; harmless warning).
 
@@ -182,8 +186,10 @@ When adding a new table or column:
 
 `cli.py` exposes:
 
-- `init` — seeds workspaces (`fulltime` / `consulting` / `personal`) and the owner user from `KAIRO_OWNER_EMAIL`. Idempotent.
-- `migrate-v1` — imports v1's `~/.kairo/tasks.db` into a chosen workspace. Defensive about column existence; preserves timestamps; reads tags via the v1 `task_tags` join table; converts integer hours → float. `--dry-run` summarizes without writing.
+- `init` — seeds the default `personal` workspace and the owner user from `KAIRO_OWNER_EMAIL`. Idempotent.
+- `add-workspace --slug=<slug> --name="<name>" [--color=#hex]` — create a new workspace. If `--color` is omitted, picks the next slot from `workspace_meta.DEFAULT_PALETTE` based on current workspace count.
+- `list-workspaces` — print all workspaces with slugs + accent colors.
+- `migrate-v1 --workspace=<slug>` — imports v1's `~/.kairo/tasks.db` into a chosen workspace (the slug must exist; create it first with `add-workspace` if needed). Defensive about column existence; preserves timestamps; reads tags via the v1 `task_tags` join table; converts integer hours → float. `--dry-run` summarizes without writing.
 - `rollover` — stub (full implementation in milestone 4).
 
 ## Configuration

@@ -33,7 +33,7 @@ from kairo_web.utils import (
     shift_iso_week,
     tag_color_for,
 )
-from kairo_web.workspace_meta import meta_for
+from kairo_web.workspace_meta import derive_bg_fg
 
 router = APIRouter(tags=["tasks"])
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
@@ -59,14 +59,14 @@ def _week_url(slug: str, year: int, week: int) -> str:
     return f"/w/{slug}/week/{year}-W{week:02d}"
 
 
-def _workspace_dict(slug: str, name: str, badge_count: int = 0) -> dict:
-    m = meta_for(slug)
+def _workspace_dict(slug: str, name: str, color: str, badge_count: int = 0) -> dict:
+    bg, fg = derive_bg_fg(color)
     return {
         "slug": slug,
         "name": name,
-        "color_hex": m["color_hex"],
-        "color_bg": m["color_bg"],
-        "color_fg": m["color_fg"],
+        "color_hex": color,
+        "color_bg": bg,
+        "color_fg": fg,
         "badge_count": badge_count,
     }
 
@@ -120,9 +120,10 @@ def _build_partial_context(
     today_year, today_week = get_current_iso_week()
 
     return {
-        "workspace": _workspace_dict(workspace.slug, workspace.name),
+        "workspace": _workspace_dict(workspace.slug, workspace.name, workspace.color),
         "workspaces": [
-            _workspace_dict(w.slug, w.name, badge_counts.get(w.id, 0)) for w in all_workspaces
+            _workspace_dict(w.slug, w.name, w.color, badge_counts.get(w.id, 0))
+            for w in all_workspaces
         ],
         "iso_year": iso_year,
         "iso_week": iso_week,

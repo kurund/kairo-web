@@ -34,8 +34,10 @@ Open http://localhost:8001/healthz — should return `{"ok": true}`.
 
 ```bash
 uv run kairo-web --help
-uv run kairo-web init                                # seed workspaces + owner user
-uv run kairo-web migrate-v1 --workspace fulltime     # import from ~/.kairo/tasks.db
+uv run kairo-web init                                # seed default 'personal' workspace + owner user
+uv run kairo-web add-workspace --slug=work --name="Work"
+uv run kairo-web list-workspaces
+uv run kairo-web migrate-v1 --workspace personal     # import from ~/.kairo/tasks.db
 uv run kairo-web rollover                            # manual Sunday rollover
 ```
 

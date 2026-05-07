@@ -29,7 +29,7 @@ from kairo_web.utils import (
     shift_iso_week,
     tag_color_for,
 )
-from kairo_web.workspace_meta import meta_for
+from kairo_web.workspace_meta import derive_bg_fg
 
 
 def _week_url(slug: str, year: int, week: int) -> str:
@@ -39,7 +39,8 @@ router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 # Default landing workspace until real auth + active-workspace session lands.
-_DEFAULT_WORKSPACE_SLUG = "fulltime"
+# Created by `kairo-web init`. Users add more workspaces via `kairo-web add-workspace`.
+_DEFAULT_WORKSPACE_SLUG = "personal"
 
 _WEEK_PATH_RE = re.compile(r"^(\d{4})-W(\d{1,2})$")
 
@@ -73,15 +74,16 @@ def root() -> RedirectResponse:
 # ----- Live week view -------------------------------------------------------
 
 
-def _workspace_dict(slug: str, name: str, badge_count: int = 0) -> dict:
-    """Shape a workspace for the template."""
-    m = meta_for(slug)
+def _workspace_dict(slug: str, name: str, color: str, badge_count: int = 0) -> dict:
+    """Shape a workspace for the template. `color` is the accent hex (e.g. '#BE185D');
+    background and foreground are derived via HSL math."""
+    bg, fg = derive_bg_fg(color)
     return {
         "slug": slug,
         "name": name,
-        "color_hex": m["color_hex"],
-        "color_bg": m["color_bg"],
-        "color_fg": m["color_fg"],
+        "color_hex": color,
+        "color_bg": bg,
+        "color_fg": fg,
         "badge_count": badge_count,
     }
 
@@ -136,9 +138,10 @@ def _build_week_context(
     today_year, today_week = get_current_iso_week()
 
     return {
-        "workspace": _workspace_dict(workspace.slug, workspace.name),
+        "workspace": _workspace_dict(workspace.slug, workspace.name, workspace.color),
         "workspaces": [
-            _workspace_dict(w.slug, w.name, badge_counts.get(w.id, 0)) for w in all_workspaces
+            _workspace_dict(w.slug, w.name, w.color, badge_counts.get(w.id, 0))
+            for w in all_workspaces
         ],
         "iso_year": iso_year,
         "iso_week": iso_week,
@@ -246,10 +249,12 @@ def _build_preview_context(active_slug: str) -> dict:
         ]
         active_name = "Personal"
 
+    # Hardcoded preview switcher — three sample workspaces with palette colors,
+    # purely for showing the layout. Independent of the live DB workspaces.
     workspaces_for_switcher = [
-        _workspace_dict("fulltime", "Full-time", 5),
-        _workspace_dict("consulting", "Consulting", 3),
-        _workspace_dict("personal", "Personal", 5),
+        _workspace_dict("fulltime", "Full-time", "#0F766E", 5),
+        _workspace_dict("consulting", "Consulting", "#4338CA", 3),
+        _workspace_dict("personal", "Personal", "#BE185D", 5),
     ]
     workspace = next(w for w in workspaces_for_switcher if w["slug"] == active_slug)
     workspace["badge_count"] = 0  # active tab doesn't show badge
