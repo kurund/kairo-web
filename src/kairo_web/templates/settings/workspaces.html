@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Workspaces — Kairo settings{% endblock %}
+
+{% block content %}
+<main class="max-w-3xl mx-auto p-6">
+
+  {# Header #}
+  <div class="mb-5 flex items-center justify-between">
+    <div>
+      <p class="text-[12px] uppercase tracking-wider text-slate-500 mb-1">Settings</p>
+      <h1 class="text-xl font-medium">Workspaces</h1>
+    </div>
+    <a href="/" class="text-[13px] text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
+      <span>←</span> Back to week
+    </a>
+  </div>
+
+  {% if error %}
+    <div class="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-[13px] text-red-900">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  {# Add new workspace #}
+  <section class="bg-white border border-slate-200 rounded-xl p-5 mb-6 shadow-sm">
+    <h2 class="text-[14px] font-medium mb-3">Add workspace</h2>
+    <form method="post" action="/settings/workspaces"
+          x-data="{
+            name: '',
+            slug: '',
+            color: '{{ next_palette_color }}',
+            slugManuallyEdited: false,
+            slugifyName(n) {
+              return n.toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+            }
+          }"
+          class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+
+      <label class="block">
+        <span class="text-[12px] text-slate-600 mb-1 block">Name</span>
+        <input
+          type="text"
+          name="name"
+          x-model="name"
+          @input="if (!slugManuallyEdited) slug = slugifyName(name)"
+          required
+          class="w-full px-2.5 py-1.5 border border-slate-200 rounded text-[13px] focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+          placeholder="e.g. Side projects" />
+      </label>
+
+      <label class="block">
+        <span class="text-[12px] text-slate-600 mb-1 block">
+          Slug
+          <span class="text-slate-400 font-normal">— used in URLs (immutable after creation)</span>
+        </span>
+        <input
+          type="text"
+          name="slug"
+          x-model="slug"
+          @input="slugManuallyEdited = true"
+          required
+          pattern="[a-z0-9][a-z0-9_-]*"
+          class="w-full px-2.5 py-1.5 border border-slate-200 rounded text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+          placeholder="side-projects" />
+      </label>
+
+      <div class="block">
+        <span class="text-[12px] text-slate-600 mb-1 block">Color</span>
+        <div class="flex items-center gap-1.5">
+          {% for hex in palette %}
+            <button
+              type="button"
+              @click="color = '{{ hex }}'"
+              :class="color === '{{ hex }}' ? 'ring-2 ring-offset-1 ring-slate-900' : 'hover:ring-2 hover:ring-slate-300'"
+              class="w-6 h-6 rounded-full transition"
+              style="background: {{ hex }};"
+              :aria-label="'Select color {{ hex }}'"
+              title="{{ hex }}"></button>
+          {% endfor %}
+          <input
+            type="text"
+            name="color"
+            x-model="color"
+            required
+            pattern="#[0-9A-Fa-f]{6}"
+            class="w-24 ml-2 px-2 py-1.5 border border-slate-200 rounded text-[12px] font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+            title="Hex color, e.g. #BE185D" />
+        </div>
+      </div>
+
+      <div class="sm:col-span-3 flex justify-end">
+        <button
+          type="submit"
+          class="px-3 py-1.5 bg-slate-900 text-white rounded text-[13px] font-medium hover:bg-slate-800">
+          + Add workspace
+        </button>
+      </div>
+    </form>
+  </section>
+
+  {# Existing workspaces #}
+  <section class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+    <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+      <h2 class="text-[14px] font-medium">Existing workspaces</h2>
+      <span class="text-[11px] text-slate-400">{{ workspaces | length }} total</span>
+    </div>
+    <ul class="divide-y divide-slate-100">
+      {% for ws in workspaces %}
+        <li
+          x-data="{ editing: false, name: '{{ ws.name|e }}', color: '{{ ws.color_hex }}' }"
+          class="px-5 py-3">
+
+          {# View mode #}
+          <div x-show="!editing" class="flex items-center gap-3">
+            <span class="w-3 h-3 rounded-full flex-shrink-0" style="background: {{ ws.color_hex }};"></span>
+            <span class="flex-1 min-w-0 flex items-baseline gap-3">
+              <span class="font-medium text-[14px]">{{ ws.name }}</span>
+              <span class="font-mono text-[11px] text-slate-400">{{ ws.slug }}</span>
+              <span class="font-mono text-[11px] text-slate-400">{{ ws.color_hex }}</span>
+            </span>
+            <a
+              href="/w/{{ ws.slug }}/week/{{ current_year_week }}"
+              class="text-[12px] text-slate-500 hover:text-slate-900">Open →</a>
+            <button
+              @click="editing = true"
+              type="button"
+              class="text-[12px] text-slate-500 hover:text-slate-900 px-2 py-0.5 border border-slate-200 rounded hover:bg-slate-50">
+              Edit
+            </button>
+          </div>
+
+          {# Edit mode (inline form) #}
+          <form
+            x-show="editing"
+            x-cloak
+            method="post"
+            action="/settings/workspaces/{{ ws.slug }}/edit"
+            class="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 items-center">
+
+            <label class="block">
+              <span class="text-[11px] text-slate-500 mb-0.5 block">Name</span>
+              <input
+                type="text"
+                name="name"
+                x-model="name"
+                required
+                class="w-full px-2 py-1 border border-slate-200 rounded text-[13px] focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent" />
+            </label>
+
+            <div class="block">
+              <span class="text-[11px] text-slate-500 mb-0.5 block">Color</span>
+              <div class="flex items-center gap-1.5">
+                {% for hex in palette %}
+                  <button
+                    type="button"
+                    @click="color = '{{ hex }}'"
+                    :class="color === '{{ hex }}' ? 'ring-2 ring-offset-1 ring-slate-900' : 'hover:ring-2 hover:ring-slate-300'"
+                    class="w-5 h-5 rounded-full transition"
+                    style="background: {{ hex }};"></button>
+                {% endfor %}
+                <input
+                  type="text"
+                  name="color"
+                  x-model="color"
+                  required
+                  pattern="#[0-9A-Fa-f]{6}"
+                  class="w-20 ml-1 px-1.5 py-0.5 border border-slate-200 rounded text-[11px] font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent" />
+              </div>
+            </div>
+
+            <div class="flex items-end gap-2">
+              <button
+                type="submit"
+                class="px-2.5 py-1 bg-slate-900 text-white rounded text-[12px] font-medium hover:bg-slate-800">
+                Save
+              </button>
+              <button
+                type="button"
+                @click="editing = false; name = '{{ ws.name|e }}'; color = '{{ ws.color_hex }}'"
+                class="px-2.5 py-1 border border-slate-200 rounded text-[12px] text-slate-600 hover:bg-slate-50">
+                Cancel
+              </button>
+            </div>
+
+            <p class="sm:col-span-3 text-[11px] text-slate-400">
+              Slug <code class="font-mono">{{ ws.slug }}</code> can't be changed — it appears in URLs and bookmarks.
+            </p>
+          </form>
+        </li>
+      {% else %}
+        <li class="px-5 py-6 text-center text-[13px] text-slate-400 italic">
+          No workspaces yet. Add one above.
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+</main>
+{% endblock %}

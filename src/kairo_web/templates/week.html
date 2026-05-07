@@ -52,9 +52,14 @@
               {% endif %}
             </a>
           {% endfor %}
-          <div class="border-t border-slate-100 mt-1 pt-1 px-3 py-1.5 text-[11px] text-slate-400 leading-snug">
-            Add a workspace via CLI:<br>
-            <code class="text-slate-600">kairo-web add-workspace --slug=&lt;slug&gt; --name=&lt;name&gt;</code>
+          <div class="border-t border-slate-100 mt-1 pt-1">
+            <a
+              href="/settings/workspaces"
+              role="menuitem"
+              class="flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+              <span class="w-2 h-2 inline-flex items-center justify-center text-slate-500">+</span>
+              <span>Manage workspaces</span>
+            </a>
           </div>
         </div>
       </div>

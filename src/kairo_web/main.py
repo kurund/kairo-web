@@ -15,6 +15,7 @@ from kairo_web.db import get_session
 from kairo_web.paths import STATIC_DIR
 from kairo_web.routes import digest as digest_routes
 from kairo_web.routes import pages as page_routes
+from kairo_web.routes import settings as settings_routes
 from kairo_web.routes import tasks as task_routes
 from kairo_web.routes import workspaces as workspace_routes
 
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
     app.include_router(workspace_routes.router)
     app.include_router(task_routes.router)
     app.include_router(digest_routes.router)
+    app.include_router(settings_routes.router)
 
     @app.get("/healthz", tags=["meta"])
     def healthz(session: Session = Depends(get_session)) -> JSONResponse:
