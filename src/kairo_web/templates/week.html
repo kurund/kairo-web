@@ -8,21 +8,55 @@
 
     {# --- Top bar: workspace switcher + week navigation --- #}
     <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-200">
-      <div class="flex items-center gap-1">
-        {% for ws in workspaces %}
-          {% if ws.slug == workspace.slug %}
-            <span class="px-2.5 py-1.5 text-[13px] font-medium border-b-2 -mb-px inline-flex items-center gap-1.5" style="border-color: {{ ws.color_hex }};">
-              {{ ws.name }}
-              {% if ws.badge_count %}<span class="text-[11px] font-medium px-1.5 py-px rounded-full" style="background: {{ ws.color_bg }}; color: {{ ws.color_fg }};">{{ ws.badge_count }}</span>{% endif %}
-            </span>
-          {% else %}
-            <a href="/w/{{ ws.slug }}/week/{{ year_week }}"
-               class="px-2.5 py-1.5 text-[13px] text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5 rounded hover:bg-slate-50">
-              {{ ws.name }}
-              {% if ws.badge_count %}<span class="text-[11px] font-medium px-1.5 py-px rounded-full" style="background: {{ ws.color_bg }}; color: {{ ws.color_fg }};">{{ ws.badge_count }}</span>{% endif %}
-            </a>
+      {# Workspace switcher — dropdown (scales to many workspaces). #}
+      <div
+        x-data="{ open: false }"
+        @click.outside="open = false"
+        @keydown.escape="open = false"
+        class="relative">
+        <button
+          @click="open = !open"
+          type="button"
+          aria-haspopup="menu"
+          :aria-expanded="open"
+          class="px-2.5 py-1.5 inline-flex items-center gap-2 rounded hover:bg-slate-50 border-b-2 -mb-px"
+          :class="open && 'bg-slate-50'"
+          style="border-color: {{ workspace.color_hex }};">
+          <span class="text-[13px] font-medium text-slate-900">{{ workspace.name }}</span>
+          {% if workspace.badge_count %}
+            <span class="text-[11px] font-medium px-1.5 py-px rounded-full" style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ workspace.badge_count }}</span>
           {% endif %}
-        {% endfor %}
+          <svg class="w-3 h-3 text-slate-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+
+        <div
+          x-show="open"
+          x-transition.opacity.duration.150ms
+          x-cloak
+          role="menu"
+          class="absolute left-0 mt-1 min-w-[220px] bg-white border border-slate-200 rounded-md shadow-lg py-1 z-20">
+          {% for ws in workspaces %}
+            <a
+              href="/w/{{ ws.slug }}/week/{{ year_week }}"
+              role="menuitem"
+              class="flex items-center gap-2.5 px-3 py-1.5 text-[13px] hover:bg-slate-50 {% if ws.slug == workspace.slug %}bg-slate-50{% endif %}">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {{ ws.color_hex }};"></span>
+              <span class="flex-1 truncate {% if ws.slug == workspace.slug %}font-medium text-slate-900{% else %}text-slate-700{% endif %}">{{ ws.name }}</span>
+              {% if ws.badge_count %}
+                <span class="text-[10px] font-medium px-1.5 py-px rounded-full" style="background: {{ ws.color_bg }}; color: {{ ws.color_fg }};">{{ ws.badge_count }}</span>
+              {% endif %}
+              {% if ws.slug == workspace.slug %}
+                <svg class="w-3 h-3 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+              {% endif %}
+            </a>
+          {% endfor %}
+          <div class="border-t border-slate-100 mt-1 pt-1 px-3 py-1.5 text-[11px] text-slate-400 leading-snug">
+            Add a workspace via CLI:<br>
+            <code class="text-slate-600">kairo-web add-workspace --slug=&lt;slug&gt; --name=&lt;name&gt;</code>
+          </div>
+        </div>
       </div>
       <div class="flex items-center gap-1.5 text-slate-600">
         <a href="{{ prev_week_url }}" class="w-6 h-6 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-slate-50" title="Previous week">‹</a>
