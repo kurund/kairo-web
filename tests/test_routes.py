@@ -130,6 +130,30 @@ def test_capture_with_explicit_destination_inbox(client: TestClient) -> None:
         assert t.iso_year is None and t.iso_week is None
 
 
+def test_week_page_capture_bar_primary_is_this_week(client: TestClient) -> None:
+    """On the week page, the FIRST submit button (the one Enter triggers) is 'This week'.
+
+    The button's name=destination value='week' must come before value='inbox' in source order.
+    """
+    r = client.get("/w/fulltime/week/2026-W19")
+    assert r.status_code == 200
+    week_btn = r.text.find('value="week"')
+    inbox_btn = r.text.find('value="inbox"')
+    assert week_btn != -1 and inbox_btn != -1
+    assert week_btn < inbox_btn, "On the week page, '+ This week' should come before '+ Inbox'"
+    # Placeholder should reflect the new default.
+    assert "Enter adds to this week" in r.text
+
+
+def test_inbox_page_capture_bar_only_inbox_button(client: TestClient) -> None:
+    """On the inbox page, only '+ Inbox' is rendered; no 'This week' button at all."""
+    r = client.get("/w/fulltime/inbox")
+    assert r.status_code == 200
+    assert 'value="inbox"' in r.text
+    assert 'value="week"' not in r.text
+    assert "Enter adds to inbox" in r.text
+
+
 def test_empty_capture_is_noop(client: TestClient) -> None:
     r = client.post("/w/fulltime/week/2026-W19/tasks", data={"capture_text": "   "})
     assert r.status_code == 200

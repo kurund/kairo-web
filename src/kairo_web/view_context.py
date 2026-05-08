@@ -222,8 +222,9 @@ def build_week_context(
         "week_url_for_tab": week_url(workspace.slug, today_year, today_week),
         # Capture-bar config.
         "capture_action_url": f"/w/{workspace.slug}/week/{iso_year}-W{iso_week:02d}/tasks",
-        "show_this_week_button": True,
+        "primary_destination": "week",  # Enter on the week page schedules into the viewed week.
         "main_target_id": "week-main",
+        "capture_placeholder": "Capture — Enter adds to this week · supports #tag @project ~Nh",
     }
 
 
@@ -340,6 +341,7 @@ def build_inbox_context(
         "week_url_for_tab": week_url(workspace.slug, today_year, today_week),
         # Capture-bar config.
         "capture_action_url": f"/w/{workspace.slug}/inbox/tasks",
-        "show_this_week_button": False,
+        "primary_destination": "inbox",  # Enter on the inbox page captures to inbox.
         "main_target_id": "inbox-main",
+        "capture_placeholder": "Capture — Enter adds to inbox · supports #tag @project ~Nh",
     }

@@ -94,12 +94,14 @@ Fix login bug #urgent #auth @auth-rewrite ~2h
 
 Parses to: title=`Fix login bug`, tags=`[urgent, auth]`, project=`auth-rewrite`, estimate=`2h`.
 
-**Default destination is the inbox**, not the viewed week. Two submit buttons sit next to the input:
+**Default destination follows the active tab.** The capture bar's primary submit button (the one Enter triggers) matches whichever page the user is on:
 
-- **`+ Inbox`** (primary, dark) — Enter on the input also triggers this. The new task lands unscheduled in the workspace inbox for triage. This is the GTD-friendly default: capture cheaply now, decide where it belongs later.
-- **`This week`** (secondary, outlined) — schedules the new task directly into the viewed ISO week. Use when you already know it belongs in this week.
+- **On the Week page** — primary is `+ This week` (lands in the viewed ISO week); secondary is `+ Inbox` (lands in inbox for later triage).
+- **On the Inbox page** — only `+ Inbox` is rendered. There is no week context to schedule into.
 
-This default reflects a deliberate choice to nudge a triage habit rather than letting the active week become a dumping ground. Tasks in the inbox are easy to move into a week later (one click in the inbox panel).
+This is a deliberate change from earlier "always inbox" behavior. Once the inbox got its own page, having Enter on the week page send tasks away from that page felt counter-intuitive. The tabbed structure makes the user's intent clear: whichever surface you're on, that's where capture lands.
+
+If you want triage discipline, work from the Inbox page; if you're confidently planning your week, work from the Week page. The secondary button gives you the other destination as an explicit override.
 
 ### 7.3 Today strip
 

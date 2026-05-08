@@ -164,14 +164,19 @@ Fix login bug #urgent #auth @auth-rewrite ~2h
 
 19 unit tests in `tests/test_capture.py`. **Add a test for any new escape rule or syntax extension.**
 
-### Capture default: inbox, not the viewed week
+### Capture default: follows the active tab
 
-The POST `/w/{slug}/week/{ywk}/tasks` endpoint reads a `destination` form field:
+The POST `/w/{slug}/week/{ywk}/tasks` and `/w/{slug}/inbox/tasks` endpoints both read a `destination` form field:
 
-- `"inbox"` (default) — task is created with `iso_year=NULL, iso_week=NULL` and lands in the workspace inbox for triage.
+- `"inbox"` — task is created with `iso_year=NULL, iso_week=NULL` and lands in the workspace inbox for triage.
 - `"week"` — task is scheduled directly into the viewed ISO week.
 
-The week.html template wires two submit buttons (`+ Inbox` first, so Enter triggers it; `This week` second). This is a deliberate UX choice toward GTD-style triage. **Don't reverse it without an explicit product reason.**
+If `destination` is missing, the server defaults to `"inbox"` (defensive fallback for non-UI clients). In the UI, the **primary submit button matches the active tab**:
+
+- **Week page** renders `+ This week` first (gets Enter) and `+ Inbox` second.
+- **Inbox page** renders only `+ Inbox`.
+
+This is driven by the `primary_destination` field in the view context (`"week"` or `"inbox"`). Each context also supplies its own `capture_placeholder` so the input hint reflects what Enter will do.
 
 ### Workspace switcher links
 
