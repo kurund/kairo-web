@@ -282,8 +282,28 @@ def migrate_v1(source: Path, workspace_slug: str, dry_run: bool) -> None:
 
 @cli.command()
 def rollover() -> None:
-    """Manually trigger rollover for all workspaces (full impl in milestone 4)."""
-    click.echo("rollover: not yet implemented (milestone 4).")
+    """Manually trigger rollover for all workspaces.
+
+    Picks the current ISO week as the closing week and shifts every workspace's
+    open tasks into the next week. The same logic the Sunday-23:59 scheduler runs.
+    """
+    from kairo_web.services.rollover import rollover_all_workspaces
+
+    with Session(engine) as session:
+        summaries = rollover_all_workspaces(session)
+
+    if not summaries:
+        click.echo("no workspaces — nothing to roll over.")
+        return
+
+    total = sum(s.moved for s in summaries)
+    for s in summaries:
+        click.echo(
+            f"  {s.workspace_slug:20} "
+            f"{s.from_year}-W{s.from_week:02d} → {s.to_year}-W{s.to_week:02d}  "
+            f"moved {s.moved}"
+        )
+    click.echo(f"rolled over {total} task(s) across {len(summaries)} workspace(s).")
 
 
 if __name__ == "__main__":

@@ -23,17 +23,12 @@ from sqlmodel import Session, select
 from kairo_web.db import get_session
 from kairo_web.models import Tag, Task, TaskTag
 from kairo_web.paths import TEMPLATE_DIR
+from kairo_web.request_filters import extract_week_filters
 from kairo_web.services import queries
 from kairo_web.services.capture import parse_capture
-from kairo_web.utils import (
-    format_hours,
-    format_today_label,
-    format_week_label,
-    get_current_iso_week,
-    shift_iso_week,
-    tag_color_for,
-)
-from kairo_web.workspace_meta import derive_bg_fg
+from kairo_web.services.rollover import rollover_workspace
+from kairo_web.utils import shift_iso_week
+from kairo_web.view_context import build_week_context
 
 router = APIRouter(tags=["tasks"])
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
@@ -55,108 +50,23 @@ def _parse_year_week(year_week: str) -> tuple[int, int]:
     return iso_year, iso_week
 
 
-def _week_url(slug: str, year: int, week: int) -> str:
-    return f"/w/{slug}/week/{year}-W{week:02d}"
-
-
-def _workspace_dict(slug: str, name: str, color: str, badge_count: int = 0) -> dict:
-    bg, fg = derive_bg_fg(color)
-    return {
-        "slug": slug,
-        "name": name,
-        "color_hex": color,
-        "color_bg": bg,
-        "color_fg": fg,
-        "badge_count": badge_count,
-    }
-
-
-def _task_to_dict(task: Task) -> dict:
-    return {
-        "id": task.id,
-        "title": task.title,
-        "status": task.status,
-        "is_today": bool(task.is_today),
-        "project": task.project,
-        "estimate_hours": task.estimate_hours,
-        "estimate_label": format_hours(task.estimate_hours),
-        "tags": [{"name": t.name, "color": tag_color_for(t.name)} for t in task.tags],
-    }
-
-
-def _build_partial_context(
-    session: Session,
-    workspace_slug: str,
-    iso_year: int,
-    iso_week: int,
-) -> dict:
-    """Rebuild the same context the GET week route uses, so the partial renders identically."""
-    workspace = queries.get_workspace(session, workspace_slug)
-    if workspace is None:
-        raise HTTPException(status_code=404, detail=f"workspace '{workspace_slug}' not found")
-    assert workspace.id is not None
-
-    week_tasks = queries.get_week_tasks(session, workspace.id, iso_year, iso_week)
-    inbox_tasks = queries.get_inbox_tasks(session, workspace.id)
-    badge_counts = queries.get_workspace_badges(session, iso_year, iso_week)
-    all_workspaces = queries.list_workspaces(session)
-
-    week_task_dicts = [_task_to_dict(t) for t in week_tasks]
-    today_task_dicts = [t for t in week_task_dicts if t["is_today"]]
-
-    open_count = sum(1 for t in week_task_dicts if t["status"] == "open")
-    done_count = sum(1 for t in week_task_dicts if t["status"] == "completed")
-    total = open_count + done_count
-    estimated = round(
-        sum((t["estimate_hours"] or 0) for t in week_task_dicts if t["status"] == "open"), 2
-    )
-    logged = round(
-        sum((t["estimate_hours"] or 0) for t in week_task_dicts if t["status"] == "completed"), 2
-    )
-    percent = int(round(100 * done_count / total)) if total else 0
-
-    prev_year, prev_week = shift_iso_week(iso_year, iso_week, -1)
-    next_year, next_week = shift_iso_week(iso_year, iso_week, +1)
-    today_year, today_week = get_current_iso_week()
-
-    return {
-        "workspace": _workspace_dict(workspace.slug, workspace.name, workspace.color),
-        "workspaces": [
-            _workspace_dict(w.slug, w.name, w.color, badge_counts.get(w.id, 0))
-            for w in all_workspaces
-        ],
-        "iso_year": iso_year,
-        "iso_week": iso_week,
-        "year_week": f"{iso_year}-W{iso_week:02d}",
-        "week_label": format_week_label(iso_year, iso_week),
-        "prev_week_url": _week_url(workspace.slug, prev_year, prev_week),
-        "next_week_url": _week_url(workspace.slug, next_year, next_week),
-        "today_url": _week_url(workspace.slug, today_year, today_week),
-        "today_date_label": format_today_label(),
-        "today_done_count": sum(1 for t in today_task_dicts if t["status"] == "completed"),
-        "today_total_count": len(today_task_dicts),
-        "today_tasks": today_task_dicts,
-        "week_tasks": week_task_dicts,
-        "inbox_tasks": [{"id": t.id, "title": t.title} for t in inbox_tasks],
-        "inbox_count": len(inbox_tasks),
-        "stats": {
-            "open": open_count,
-            "done": done_count,
-            "estimated_hours": estimated,
-            "logged_hours": logged,
-            "percent_complete": percent,
-        },
-    }
-
-
 def _render_partial(
     request: Request,
     session: Session,
     workspace_slug: str,
     year_week: str,
 ) -> HTMLResponse:
+    """Re-render the swappable #week-main partial after a mutation.
+
+    Pulls the active filter (tag/project) out of HX-Current-URL so mutations
+    preserve filter state automatically.
+    """
     iso_year, iso_week = _parse_year_week(year_week)
-    ctx = _build_partial_context(session, workspace_slug, iso_year, iso_week)
+    filter_tag, filter_project = extract_week_filters(request)
+    ctx = build_week_context(
+        session, workspace_slug, iso_year, iso_week,
+        filter_tag=filter_tag, filter_project=filter_project,
+    )
     return templates.TemplateResponse(request, "partials/week_main.html", ctx)
 
 
@@ -381,6 +291,30 @@ def move_task(
         session.add_all([task, neighbor])
         session.commit()
 
+    return _render_partial(request, session, workspace_slug, year_week)
+
+
+@router.post(
+    "/w/{workspace_slug}/week/{year_week}/rollover",
+    response_class=HTMLResponse,
+)
+def manual_rollover(
+    request: Request,
+    workspace_slug: str,
+    year_week: str,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Move open tasks from the viewed week to the next week (manual button).
+
+    Same logic as the Sunday-night auto-rollover, but scoped to the workspace
+    + week the user is currently looking at.
+    """
+    iso_year, iso_week = _parse_year_week(year_week)
+    workspace = queries.get_workspace(session, workspace_slug)
+    if workspace is None or workspace.id is None:
+        raise HTTPException(status_code=404, detail="workspace not found")
+    to_year, to_week = shift_iso_week(iso_year, iso_week, +1)
+    rollover_workspace(session, workspace.id, iso_year, iso_week, to_year, to_week)
     return _render_partial(request, session, workspace_slug, year_week)
 
 

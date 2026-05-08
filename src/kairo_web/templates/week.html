@@ -68,6 +68,16 @@
         <span class="text-[13px] font-medium text-slate-900 min-w-[160px] text-center">{{ week_label }}</span>
         <a href="{{ next_week_url }}" class="w-6 h-6 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-slate-50" title="Next week">›</a>
         <a href="{{ today_url }}" class="ml-1 px-2 py-0.5 text-[12px] border border-slate-200 rounded hover:bg-slate-50" title="Jump to current week (g)">Today</a>
+        <button
+          type="button"
+          hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/rollover"
+          hx-target="#week-main"
+          hx-swap="outerHTML"
+          hx-confirm="Move all open tasks from this week to next week?"
+          class="ml-1 px-2 py-0.5 text-[12px] border border-slate-200 rounded hover:bg-slate-50 text-slate-600"
+          title="Move all open tasks in this week to next week (auto-runs Sunday 23:59)">
+          Roll forward →
+        </button>
       </div>
     </div>
 
