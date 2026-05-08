@@ -14,10 +14,17 @@
 #}
 
 {# Workspace switcher + tabs are grouped on the left so the tab positions
-   stay stable when the week-nav region appears or disappears on the right. #}
-<div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 gap-4">
+   stay stable when the week-nav region appears or disappears on the right.
+
+   Visual hierarchy:
+     - The workspace is a CONTEXT (which silo you're in) — rendered as a subtle
+       filled pill with an accent dot, NO underline.
+     - The tabs are VIEWS within the context — rendered as text with an underline
+       accent on the active one.
+     - A thin vertical divider separates the two so they don't read as peers. #}
+<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 gap-4 bg-white">
  <div class="flex items-center gap-3">
-  {# --- Workspace switcher --- #}
+  {# --- Workspace switcher (context pill) --- #}
   <div
     x-data="{ open: false }"
     @click.outside="open = false"
@@ -28,11 +35,14 @@
       type="button"
       aria-haspopup="menu"
       :aria-expanded="open"
-      class="px-2.5 py-1.5 inline-flex items-center gap-2 rounded hover:bg-slate-50 border-b-2 -mb-px"
-      :class="open && 'bg-slate-50'"
-      style="border-color: {{ workspace.color_hex }};">
+      class="pl-2.5 pr-2 py-1.5 inline-flex items-center gap-2 rounded-md bg-slate-100 hover:bg-slate-200 transition-colors"
+      :class="open && 'bg-slate-200'">
+      <span
+        class="w-2 h-2 rounded-full flex-shrink-0"
+        style="background: {{ workspace.color_hex }};"
+        aria-hidden="true"></span>
       <span class="text-[13px] font-medium text-slate-900">{{ workspace.name }}</span>
-      <svg class="w-3 h-3 text-slate-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <svg class="w-3 h-3 text-slate-500 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
       </svg>
     </button>
@@ -66,6 +76,9 @@
       </div>
     </div>
   </div>
+
+  {# --- Vertical divider separating the workspace pill from the tabs --- #}
+  <span class="w-px h-5 bg-slate-200" aria-hidden="true"></span>
 
   {# --- Tabs: Inbox | Week --- #}
   <nav class="flex items-center gap-1" role="tablist">
