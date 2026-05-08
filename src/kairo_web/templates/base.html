@@ -4,6 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}Kairo{% endblock %}</title>
+
+  {# Favicons + iOS / PWA icons. SVG is preferred; .ico for legacy browsers,
+     180x180 PNG for iOS Add-to-Home-Screen, manifest for Android PWA. #}
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
+  <link rel="shortcut icon" href="/static/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
+  <link rel="manifest" href="/static/manifest.webmanifest" />
+  <meta name="theme-color" content="#BE185D" />
+
   <link rel="stylesheet" href="/static/app.css" />
   <!-- Tailwind via Play CDN — fine for development; production uses Tailwind CLI build. -->
   <script src="https://cdn.tailwindcss.com"></script>
