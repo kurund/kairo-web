@@ -1,4 +1,4 @@
-{# Shared capture bar.
+{# Shared capture bar with inline autocomplete for #tag and @project.
 
    Required context:
      - capture_action_url: where the form posts (POST endpoint that creates a task)
@@ -6,27 +6,73 @@
        ('week-main' or 'inbox-main')
      - primary_destination: 'inbox' | 'week' — drives which button is rendered first
        (gets Enter via natural form submit) and which gets the dark-fill primary style.
-       The other destination is rendered as a secondary outline button on the week page;
-       on the inbox page only the primary button is shown.
      - capture_placeholder: input placeholder text (varies per page).
+     - available_tags: list of tag names in this workspace (drives #tag autocomplete).
+     - available_projects: list of project names in this workspace (drives @project autocomplete).
+
+   Autocomplete UX:
+     - Type '#' to start a tag suggestion; '@' for a project suggestion.
+     - Down/Up arrows navigate the suggestion list.
+     - Tab accepts the highlighted suggestion (replaces the partial word + space).
+     - Escape closes the suggestion list.
+     - Enter still submits the form — autocomplete never intercepts submit.
 #}
 
 <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
   <form
+    x-data='captureAutocomplete({{ available_tags|tojson }}, {{ available_projects|tojson }})'
+    @click.outside="open = false"
     hx-post="{{ capture_action_url }}"
     hx-target="#{{ main_target_id }}"
     hx-swap="outerHTML"
-    hx-on::after-request="if (event.detail.successful) { this.reset(); this.querySelector('input[name=capture_text]').focus(); }"
+    hx-on::after-request="if (event.detail.successful) { this.reset(); this.querySelector('input[name=capture_text]').focus(); $data.open = false; }"
     class="flex items-center gap-2">
     <span class="text-slate-400 font-medium select-none" title="Press / to focus">/</span>
-    <input
-      id="capture-input"
-      type="text"
-      name="capture_text"
-      placeholder="{{ capture_placeholder }}"
-      autocomplete="off"
-      class="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded text-[13px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
-    />
+
+    {# Wrap the input + suggestion dropdown so the dropdown anchors below the input. #}
+    <div class="relative flex-1">
+      <input
+        id="capture-input"
+        x-ref="formInput"
+        type="text"
+        name="capture_text"
+        placeholder="{{ capture_placeholder }}"
+        autocomplete="off"
+        spellcheck="false"
+        @input="onInput($event)"
+        @keydown="onKeydown($event)"
+        :aria-expanded="open"
+        aria-autocomplete="list"
+        aria-controls="capture-ac-list"
+        class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-[13px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+      />
+
+      {# Suggestion dropdown — visible only when there are matches and the cursor
+         is inside a #word or @word being typed. #}
+      <div
+        x-show="open"
+        x-cloak
+        id="capture-ac-list"
+        role="listbox"
+        class="absolute top-full left-0 mt-1 z-30 min-w-[200px] bg-white border border-slate-200 rounded shadow-lg py-1">
+        <template x-for="(item, idx) in items" :key="item">
+          <button
+            type="button"
+            role="option"
+            :aria-selected="idx === selectedIndex"
+            @mousedown.prevent="accept(item, $refs.formInput)"
+            @mouseover="selectedIndex = idx"
+            :class="idx === selectedIndex ? 'bg-slate-100' : ''"
+            class="block w-full text-left px-3 py-1 text-[13px] hover:bg-slate-100 font-mono">
+            <span x-text="item"></span>
+          </button>
+        </template>
+        <div class="px-3 pt-1 mt-0.5 border-t border-slate-100 text-[10px] text-slate-400">
+          Tab to accept · Esc to close
+        </div>
+      </div>
+    </div>
+
     {% if primary_destination == "week" %}
       {# Week page: This week is primary (Enter), Inbox is secondary. #}
       <button
@@ -46,7 +92,6 @@
         + Inbox
       </button>
     {% else %}
-      {# Inbox page: only the inbox button. #}
       <button
         type="submit"
         name="destination"
@@ -58,3 +103,90 @@
     {% endif %}
   </form>
 </div>
+
+{# Alpine component definition. Lives here (not app.js) so it can read context. #}
+<script>
+  function captureAutocomplete(allTags, allProjects) {
+    return {
+      open: false,
+      items: [],
+      selectedIndex: 0,
+      allTags: allTags || [],
+      allProjects: allProjects || [],
+
+      onInput(event) {
+        const input = event.target;
+        const text = input.value;
+        const cursor = input.selectionStart ?? text.length;
+        const before = text.slice(0, cursor);
+        const wordStart = before.lastIndexOf(" ") + 1;
+        const word = before.slice(wordStart);
+
+        // Skip escape sequences (##, @@, ~~) — they're literal, not markers.
+        if (word.startsWith("##") || word.startsWith("@@") || word.startsWith("~~")) {
+          this.open = false;
+          return;
+        }
+
+        let pool = null;
+        let prefix = "";
+        if (word.startsWith("#")) {
+          pool = this.allTags;
+          prefix = "#";
+        } else if (word.startsWith("@")) {
+          pool = this.allProjects;
+          prefix = "@";
+        } else {
+          this.open = false;
+          return;
+        }
+
+        const partial = word.slice(1).toLowerCase();
+        // For projects, capture parser converts underscore → space, so we
+        // surface the matching project as @name_with_underscores.
+        this.items = pool
+          .filter((t) => {
+            const tl = t.toLowerCase();
+            return tl.startsWith(partial) && tl !== partial;
+          })
+          .slice(0, 6)
+          .map((t) => prefix + (prefix === "@" ? t.replace(/ /g, "_") : t));
+        this.open = this.items.length > 0;
+        this.selectedIndex = 0;
+      },
+
+      onKeydown(event) {
+        if (!this.open) return;
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          this.selectedIndex = (this.selectedIndex + 1) % this.items.length;
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          this.selectedIndex =
+            (this.selectedIndex - 1 + this.items.length) % this.items.length;
+        } else if (event.key === "Tab") {
+          event.preventDefault();
+          this.accept(this.items[this.selectedIndex], event.target);
+        } else if (event.key === "Escape") {
+          this.open = false;
+        }
+        // Enter is intentionally NOT intercepted — let the form submit naturally.
+      },
+
+      accept(item, input) {
+        if (!item) return;
+        const text = input.value;
+        const cursor = input.selectionStart ?? text.length;
+        const before = text.slice(0, cursor);
+        const after = text.slice(cursor);
+        const wordStart = before.lastIndexOf(" ") + 1;
+        const newText = text.slice(0, wordStart) + item + " " + after;
+        input.value = newText;
+        const newCursor = wordStart + item.length + 1;
+        input.selectionStart = input.selectionEnd = newCursor;
+        this.open = false;
+        input.focus();
+      },
+    };
+  }
+</script>

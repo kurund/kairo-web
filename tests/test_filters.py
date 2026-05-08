@@ -199,6 +199,28 @@ def test_filter_picker_dropdowns_present(client: TestClient) -> None:
     assert "+ Project" in r.text
 
 
+# ----- Capture-bar autocomplete --------------------------------------------
+
+
+def test_capture_bar_includes_autocomplete_data(client: TestClient) -> None:
+    """The capture form should be initialized with the workspace's tags + projects
+    (used by the inline autocomplete dropdown)."""
+    r = client.get(f"/w/personal/week/{YW}")
+    assert r.status_code == 200
+    # The Alpine x-data init call serializes available_tags + available_projects
+    # via Jinja's tojson filter. Pin the function name + at least one known tag/project.
+    assert "captureAutocomplete(" in r.text
+    assert '"urgent"' in r.text or "'urgent'" in r.text  # tag from seed
+    assert '"bills"' in r.text or "'bills'" in r.text   # project from seed
+
+
+def test_capture_bar_autocomplete_present_on_inbox_page(client: TestClient) -> None:
+    """Same component on the inbox page; its data also reflects the workspace."""
+    r = client.get("/w/personal/inbox")
+    assert r.status_code == 200
+    assert "captureAutocomplete(" in r.text
+
+
 # ----- Filter preservation through HTMX mutations --------------------------
 
 
