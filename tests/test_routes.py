@@ -283,3 +283,142 @@ def test_partial_response_does_not_include_full_html(client: TestClient) -> None
     assert "<html" not in r.text
     assert "<head>" not in r.text
     assert 'id="week-main"' in r.text
+
+
+# ----- Edit task -----------------------------------------------------------
+
+
+def _create_week_task(client: TestClient, workspace: str = "fulltime", capture_text: str = "Original") -> int:
+    """Helper: capture a task into the viewed week (not inbox) and return its id."""
+    client.post(
+        f"/w/{workspace}/week/2026-W19/tasks",
+        data={"capture_text": capture_text, "destination": "week"},
+    )
+    with Session(engine) as s:
+        return s.exec(select(Task)).first().id
+
+
+def test_edit_updates_title_project_estimate(client: TestClient) -> None:
+    tid = _create_week_task(client, capture_text="Original ~1h")
+    r = client.post(
+        f"/w/fulltime/week/2026-W19/tasks/{tid}/edit",
+        data={"title": "Renamed", "tags": "", "project": "new-proj", "estimate": "2h"},
+    )
+    assert r.status_code == 200
+    with Session(engine) as s:
+        t = s.exec(select(Task)).first()
+        assert t.title == "Renamed"
+        assert t.project == "new-proj"
+        assert t.estimate_hours == 2.0
+
+
+def test_edit_reconciles_tags_drop_old_add_new(client: TestClient) -> None:
+    tid = _create_week_task(client, capture_text="x #urgent #auth @proj")
+    with Session(engine) as s:
+        before = sorted([s.exec(select(Tag).where(Tag.id == link.tag_id)).first().name
+                         for link in s.exec(select(TaskTag).where(TaskTag.task_id == tid)).all()])
+    assert before == ["auth", "urgent"]
+
+    # Replace tags wholesale: drop urgent + auth, add planning.
+    client.post(
+        f"/w/fulltime/week/2026-W19/tasks/{tid}/edit",
+        data={"title": "x", "tags": "planning", "project": "proj", "estimate": ""},
+    )
+    with Session(engine) as s:
+        after = sorted([s.exec(select(Tag).where(Tag.id == link.tag_id)).first().name
+                        for link in s.exec(select(TaskTag).where(TaskTag.task_id == tid)).all()])
+    assert after == ["planning"]
+
+
+def test_edit_preserves_overlapping_tags(client: TestClient) -> None:
+    """If the new tag list shares some names with the old, the result still matches."""
+    tid = _create_week_task(client, capture_text="x #urgent #auth")
+    client.post(
+        f"/w/fulltime/week/2026-W19/tasks/{tid}/edit",
+        data={"title": "x", "tags": "urgent planning", "project": "", "estimate": ""},
+    )
+    with Session(engine) as s:
+        names = sorted([s.exec(select(Tag).where(Tag.id == link.tag_id)).first().name
+                        for link in s.exec(select(TaskTag).where(TaskTag.task_id == tid)).all()])
+    assert names == ["planning", "urgent"]
+
+
+def test_edit_strips_hash_prefix_on_tags(client: TestClient) -> None:
+    """User typing '#urgent #auth' or 'urgent auth' should both work."""
+    tid = _create_week_task(client)
+    client.post(
+        f"/w/fulltime/week/2026-W19/tasks/{tid}/edit",
+        data={"title": "x", "tags": "#urgent #auth", "project": "", "estimate": ""},
+    )
+    with Session(engine) as s:
+        names = sorted([s.exec(select(Tag).where(Tag.id == link.tag_id)).first().name
+                        for link in s.exec(select(TaskTag).where(TaskTag.task_id == tid)).all()])
+    assert names == ["auth", "urgent"]
+
+
+def test_edit_clears_project_and_estimate_when_blank(client: TestClient) -> None:
+    tid = _create_week_task(client, capture_text="x @proj ~2h")
+    client.post(
+        f"/w/fulltime/week/2026-W19/tasks/{tid}/edit",
+        data={"title": "x", "tags": "", "project": "", "estimate": ""},
+    )
+    with Session(engine) as s:
+        t = s.exec(select(Task)).first()
+        assert t.project is None
+        assert t.estimate_hours is None
+
+
+def test_edit_accepts_minute_estimates(client: TestClient) -> None:
+    tid = _create_week_task(client)
+    client.post(
+        f"/w/fulltime/week/2026-W19/tasks/{tid}/edit",
+        data={"title": "x", "tags": "", "project": "", "estimate": "30m"},
+    )
+    with Session(engine) as s:
+        t = s.exec(select(Task)).first()
+        assert t.estimate_hours == 0.5
+
+
+def test_edit_invalid_estimate_clears_value(client: TestClient) -> None:
+    """Malformed estimate input is not an error — it just clears the field."""
+    tid = _create_week_task(client, capture_text="x ~1h")
+    client.post(
+        f"/w/fulltime/week/2026-W19/tasks/{tid}/edit",
+        data={"title": "x", "tags": "", "project": "", "estimate": "banana"},
+    )
+    with Session(engine) as s:
+        t = s.exec(select(Task)).first()
+        assert t.estimate_hours is None
+
+
+def test_edit_empty_title_is_noop(client: TestClient) -> None:
+    """Empty title would orphan the task — server silently keeps the existing title."""
+    tid = _create_week_task(client, capture_text="Keep me")
+    r = client.post(
+        f"/w/fulltime/week/2026-W19/tasks/{tid}/edit",
+        data={"title": "   ", "tags": "x", "project": "y", "estimate": "1h"},
+    )
+    assert r.status_code == 200
+    with Session(engine) as s:
+        t = s.exec(select(Task)).first()
+        assert t.title == "Keep me"  # title unchanged
+        # Other fields also unchanged because we bail early.
+
+
+def test_edit_404_for_unknown_task(client: TestClient) -> None:
+    r = client.post(
+        "/w/fulltime/week/2026-W19/tasks/9999/edit",
+        data={"title": "x", "tags": "", "project": "", "estimate": ""},
+    )
+    assert r.status_code == 404
+
+
+def test_view_renders_edit_button_per_row(client: TestClient) -> None:
+    """The 'edit' button + inline form must appear on each scheduled task."""
+    _create_week_task(client, capture_text="One")
+    _create_week_task(client, capture_text="Two")
+    r = client.get("/w/fulltime/week/2026-W19")
+    assert r.status_code == 200
+    # Two rows: each has an aria-labelled edit trigger AND an /edit form action.
+    assert r.text.count('aria-label="Edit task"') == 2
+    assert r.text.count("/edit") >= 2  # one form action per row
