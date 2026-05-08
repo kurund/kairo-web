@@ -21,10 +21,10 @@
     hx-target="#week-main"
     hx-swap="outerHTML"
     aria-label="{{ 'Reopen' if task.status == 'completed' else 'Complete' }} task"
-    class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full flex-shrink-0 transition-colors hover:opacity-80 cursor-pointer p-0 border-0 bg-transparent"
+    class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm flex-shrink-0 transition-colors hover:opacity-80 cursor-pointer p-0 border-0 bg-transparent"
     {% if task.status != 'completed' %}style="border: 1.5px solid #94a3b8;"{% endif %}>
     {%- if task.status == 'completed' -%}
-      <span class="inline-flex w-3.5 h-3.5 rounded-full items-center justify-center text-white text-[8px] leading-none" style="background: {{ accent_hex }}; border: 1.5px solid {{ accent_hex }};">✓</span>
+      <span class="inline-flex w-3.5 h-3.5 rounded-sm items-center justify-center text-white text-[8px] leading-none" style="background: {{ accent_hex }}; border: 1.5px solid {{ accent_hex }};">✓</span>
     {%- endif -%}
   </button>
 {%- endmacro -%}
