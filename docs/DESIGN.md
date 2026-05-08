@@ -92,10 +92,14 @@ Supports inline syntax for power-typing:
 Fix login bug #urgent #auth @auth-rewrite ~2h
 ```
 
-Parses to: title=`Fix login bug`, tags=`[urgent, auth]`, project=`auth-rewrite`, estimate=`2h`. Hitting Enter creates the task in the current week. Modifier shortcuts:
+Parses to: title=`Fix login bug`, tags=`[urgent, auth]`, project=`auth-rewrite`, estimate=`2h`.
 
-- `Shift+Enter` — send to inbox instead of current week
-- `Cmd+Enter` — create and immediately open detail view
+**Default destination is the inbox**, not the viewed week. Two submit buttons sit next to the input:
+
+- **`+ Inbox`** (primary, dark) — Enter on the input also triggers this. The new task lands unscheduled in the workspace inbox for triage. This is the GTD-friendly default: capture cheaply now, decide where it belongs later.
+- **`This week`** (secondary, outlined) — schedules the new task directly into the viewed ISO week. Use when you already know it belongs in this week.
+
+This default reflects a deliberate choice to nudge a triage habit rather than letting the active week become a dumping ground. Tasks in the inbox are easy to move into a week later (one click in the inbox panel).
 
 ### 7.3 Today strip
 

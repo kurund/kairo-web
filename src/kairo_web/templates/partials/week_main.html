@@ -162,7 +162,7 @@
       </div>
       <div class="flex flex-col">
         {% for task in week_tasks %}
-          <div class="group grid grid-cols-[18px_1fr_auto_auto_auto] gap-2.5 items-center px-1 py-1.5 border-b border-slate-100 hover:bg-slate-50 {% if task.status == 'completed' %}opacity-60{% endif %}">
+          <div class="group grid grid-cols-[18px_1fr_auto_auto_auto_auto] gap-2.5 items-center px-1 py-1.5 border-b border-slate-100 hover:bg-slate-50 {% if task.status == 'completed' %}opacity-60{% endif %}">
             {{ status_button(task, workspace.color_hex, year_week, workspace.slug) }}
             <div class="min-w-0">
               <div class="text-[13px] {% if task.status == 'completed' %}line-through{% endif %}">{{ task.title }}</div>
@@ -183,6 +183,16 @@
               class="text-[10px] font-medium px-1.5 py-0.5 rounded {% if task.is_today %}opacity-100{% else %}opacity-0 group-hover:opacity-60 hover:opacity-100{% endif %}"
               style="color: {{ workspace.color_hex }};">
               {% if task.is_today %}★ today{% else %}+ today{% endif %}
+            </button>
+            <button
+              type="button"
+              hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/schedule"
+              hx-target="#week-main"
+              hx-swap="outerHTML"
+              aria-label="Move to inbox"
+              class="text-[10px] font-medium px-1.5 py-0.5 rounded text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-60 hover:opacity-100"
+              title="Move back to inbox (clears today flag)">
+              ↩ inbox
             </button>
             <button
               type="button"

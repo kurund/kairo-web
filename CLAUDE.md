@@ -156,6 +156,15 @@ Fix login bug #urgent #auth @auth-rewrite ~2h
 
 19 unit tests in `tests/test_capture.py`. **Add a test for any new escape rule or syntax extension.**
 
+### Capture default: inbox, not the viewed week
+
+The POST `/w/{slug}/week/{ywk}/tasks` endpoint reads a `destination` form field:
+
+- `"inbox"` (default) — task is created with `iso_year=NULL, iso_week=NULL` and lands in the workspace inbox for triage.
+- `"week"` — task is scheduled directly into the viewed ISO week.
+
+The week.html template wires two submit buttons (`+ Inbox` first, so Enter triggers it; `This week` second). This is a deliberate UX choice toward GTD-style triage. **Don't reverse it without an explicit product reason.**
+
 ### Workspace switcher links
 
 Workspace tabs in `week.html` are real `<a href="/w/{slug}/week/{ywk}">` — they preserve the viewed week when switching workspaces. Active tab uses an underline accent (`border-color: {{ ws.color_hex }}`).

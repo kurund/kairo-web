@@ -120,9 +120,20 @@ def create_task(
     workspace_slug: str,
     year_week: str,
     capture_text: str = Form(""),
+    destination: str = Form("inbox"),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
-    """Create a new task from the capture bar. Empty input is a silent no-op."""
+    """Create a new task from the capture bar. Empty input is a silent no-op.
+
+    `destination` controls where the task lands:
+      - "inbox" (default): task is unscheduled; lands in the workspace inbox
+        for triage. Enter on the capture bar produces this.
+      - "week": task is scheduled directly into the viewed ISO week. Submitted
+        when the user clicks the secondary "This week" button.
+
+    The default-to-inbox flow nudges good triage habits — capture cheaply now,
+    decide where it belongs later.
+    """
     iso_year, iso_week = _parse_year_week(year_week)
     workspace = queries.get_workspace(session, workspace_slug)
     if workspace is None:
@@ -131,15 +142,21 @@ def create_task(
 
     parsed = parse_capture(capture_text)
     if parsed.title.strip():
-        position = _next_position(session, workspace.id, iso_year, iso_week)
+        if destination == "week":
+            target_year: int | None = iso_year
+            target_week: int | None = iso_week
+        else:
+            target_year = None
+            target_week = None
+        position = _next_position(session, workspace.id, target_year, target_week)
         task = Task(
             workspace_id=workspace.id,
             title=parsed.title,
             project=parsed.project,
             estimate_hours=parsed.estimate_hours,
             position=position,
-            iso_year=iso_year,
-            iso_week=iso_week,
+            iso_year=target_year,
+            iso_week=target_week,
             created_at=_utcnow(),
         )
         session.add(task)

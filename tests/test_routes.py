@@ -82,13 +82,13 @@ def test_bad_week_400(client: TestClient) -> None:
 # ----- Mutation endpoints --------------------------------------------------
 
 
-def test_capture_creates_task_with_tags_project_estimate(client: TestClient) -> None:
+def test_capture_defaults_to_inbox(client: TestClient) -> None:
+    """No destination field → task lands in the workspace inbox (iso_year/week NULL)."""
     r = client.post(
         "/w/fulltime/week/2026-W19/tasks",
         data={"capture_text": "Fix login bug #urgent #auth @auth-rewrite ~2h"},
     )
     assert r.status_code == 200
-    assert "Fix login bug" in r.text
 
     with Session(engine) as s:
         tasks = list(s.exec(select(Task).where(Task.workspace_id == _ws_id("fulltime"))).all())
@@ -97,12 +97,37 @@ def test_capture_creates_task_with_tags_project_estimate(client: TestClient) -> 
         assert t.title == "Fix login bug"
         assert t.project == "auth-rewrite"
         assert t.estimate_hours == 2.0
-        assert t.iso_year == 2026 and t.iso_week == 19
-        # Two tags wired via TaskTag.
+        assert t.iso_year is None and t.iso_week is None  # inbox
+        # Tags + project + estimate still parsed correctly even for inbox tasks.
         links = list(s.exec(select(TaskTag).where(TaskTag.task_id == t.id)).all())
         assert len(links) == 2
         names = {s.exec(select(Tag).where(Tag.id == link.tag_id)).first().name for link in links}
         assert names == {"urgent", "auth"}
+
+
+def test_capture_with_destination_week_schedules_into_viewed_week(client: TestClient) -> None:
+    """destination=week (from the secondary 'This week' button) schedules directly."""
+    r = client.post(
+        "/w/fulltime/week/2026-W19/tasks",
+        data={"capture_text": "Sprint planning prep ~1h", "destination": "week"},
+    )
+    assert r.status_code == 200
+    with Session(engine) as s:
+        t = s.exec(select(Task)).first()
+        assert t.iso_year == 2026 and t.iso_week == 19
+        assert t.estimate_hours == 1.0
+
+
+def test_capture_with_explicit_destination_inbox(client: TestClient) -> None:
+    """Submitting the primary '+ Inbox' button sends destination=inbox explicitly."""
+    r = client.post(
+        "/w/fulltime/week/2026-W19/tasks",
+        data={"capture_text": "Some thought", "destination": "inbox"},
+    )
+    assert r.status_code == 200
+    with Session(engine) as s:
+        t = s.exec(select(Task)).first()
+        assert t.iso_year is None and t.iso_week is None
 
 
 def test_empty_capture_is_noop(client: TestClient) -> None:
@@ -168,6 +193,41 @@ def test_schedule_round_trip(client: TestClient) -> None:
         assert t.is_today is False
 
 
+def test_week_table_renders_send_to_inbox_button(client: TestClient) -> None:
+    """Each scheduled task row should expose a hover-only 'send to inbox' button."""
+    client.post(
+        "/w/fulltime/week/2026-W19/tasks",
+        data={"capture_text": "Scheduled task", "destination": "week"},
+    )
+    r = client.get("/w/fulltime/week/2026-W19")
+    assert r.status_code == 200
+    assert "↩ inbox" in r.text
+    # The button posts to the same /schedule endpoint that the inbox panel uses
+    # for the inverse direction — the toggle is symmetric.
+    assert 'aria-label="Move to inbox"' in r.text
+    assert "/tasks/" in r.text and "/schedule" in r.text
+
+
+def test_clearing_today_flag_when_moving_to_inbox(client: TestClient) -> None:
+    """A task flagged today must lose that flag when moved back to inbox."""
+    client.post(
+        "/w/fulltime/week/2026-W19/tasks",
+        data={"capture_text": "Test", "destination": "week"},
+    )
+    with Session(engine) as s:
+        tid = s.exec(select(Task)).first().id
+    client.post(f"/w/fulltime/week/2026-W19/tasks/{tid}/today")
+    with Session(engine) as s:
+        assert s.exec(select(Task)).first().is_today is True
+
+    # Send to inbox.
+    client.post(f"/w/fulltime/week/2026-W19/tasks/{tid}/schedule")
+    with Session(engine) as s:
+        t = s.exec(select(Task)).first()
+        assert t.iso_year is None and t.iso_week is None
+        assert t.is_today is False  # cleared on inbox-move
+
+
 def test_delete_removes_task_and_links(client: TestClient) -> None:
     client.post(
         "/w/fulltime/week/2026-W19/tasks",
@@ -184,8 +244,15 @@ def test_delete_removes_task_and_links(client: TestClient) -> None:
 
 
 def test_move_swaps_positions(client: TestClient) -> None:
-    client.post("/w/fulltime/week/2026-W19/tasks", data={"capture_text": "First"})
-    client.post("/w/fulltime/week/2026-W19/tasks", data={"capture_text": "Second"})
+    """Move only operates on tasks within the viewed week, so explicitly schedule both."""
+    client.post(
+        "/w/fulltime/week/2026-W19/tasks",
+        data={"capture_text": "First", "destination": "week"},
+    )
+    client.post(
+        "/w/fulltime/week/2026-W19/tasks",
+        data={"capture_text": "Second", "destination": "week"},
+    )
     with Session(engine) as s:
         tasks = list(s.exec(select(Task).order_by(Task.position.asc())).all())
         first_id, second_id = tasks[0].id, tasks[1].id

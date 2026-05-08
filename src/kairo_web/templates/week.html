@@ -81,7 +81,10 @@
       </div>
     </div>
 
-    {# --- Capture bar (outside #week-main: stays focused across swaps) --- #}
+    {# --- Capture bar (outside #week-main: stays focused across swaps) ---
+       Two submit buttons:
+         - '+ Inbox' is first, so Enter on the input triggers it (the GTD-friendly default).
+         - 'This week' is the explicit "I know where this belongs" option. #}
     <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
       <form
         hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks"
@@ -89,16 +92,31 @@
         hx-swap="outerHTML"
         hx-on::after-request="if (event.detail.successful) { this.reset(); this.querySelector('input[name=capture_text]').focus(); }"
         class="flex items-center gap-2">
-        <span class="text-slate-400 font-medium select-none">/</span>
+        <span class="text-slate-400 font-medium select-none" title="Press / to focus">/</span>
         <input
           id="capture-input"
           type="text"
           name="capture_text"
-          placeholder="Add task — try: Fix login bug #urgent #auth @auth-rewrite ~2h"
+          placeholder="Capture — Enter sends to inbox · supports #tag @project ~Nh"
           autocomplete="off"
           class="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded text-[13px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
         />
-        <button type="submit" class="text-[12px] px-2.5 py-1.5 bg-slate-900 text-white rounded hover:bg-slate-800">Add</button>
+        <button
+          type="submit"
+          name="destination"
+          value="inbox"
+          class="text-[12px] px-2.5 py-1.5 bg-slate-900 text-white rounded hover:bg-slate-800"
+          title="Default. Enter on the input also does this.">
+          + Inbox
+        </button>
+        <button
+          type="submit"
+          name="destination"
+          value="week"
+          class="text-[12px] px-2.5 py-1.5 border border-slate-200 text-slate-700 rounded hover:bg-slate-50"
+          title="Schedule directly into the viewed week (skips triage)">
+          This week
+        </button>
       </form>
     </div>
 
