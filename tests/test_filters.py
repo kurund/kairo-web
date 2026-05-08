@@ -221,6 +221,33 @@ def test_capture_bar_autocomplete_present_on_inbox_page(client: TestClient) -> N
     assert "captureAutocomplete(" in r.text
 
 
+def test_edit_form_autocomplete_modes_present(client: TestClient) -> None:
+    """Each task row's edit form should include autocomplete in 'tags' and 'project' modes."""
+    r = client.get(f"/w/personal/week/{YW}")
+    assert r.status_code == 200
+    # Tags input wraps captureAutocomplete(..., 'tags')
+    assert '"tags")' in r.text or "'tags')" in r.text or '"tags")' in r.text
+    # Project input wraps captureAutocomplete(..., 'project')
+    assert '"project")' in r.text or "'project')" in r.text
+    # The capture bar still uses the default (capture) mode.
+    assert "captureAutocomplete(" in r.text
+
+
+def test_edit_form_autocomplete_on_inbox_page(client: TestClient) -> None:
+    """Inbox page's edit form also has autocomplete on tags + project."""
+    from sqlmodel import select as sm_select
+    from kairo_web.models import Workspace as _W
+
+    with Session(engine) as s:
+        ws = s.exec(sm_select(_W).where(_W.slug == "personal")).first()
+        s.add(Task(workspace_id=ws.id, title="x", position=1))
+        s.commit()
+    r = client.get("/w/personal/inbox")
+    assert r.status_code == 200
+    assert '"tags")' in r.text
+    assert '"project")' in r.text
+
+
 # ----- Filter preservation through HTMX mutations --------------------------
 
 

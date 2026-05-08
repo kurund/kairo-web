@@ -1,0 +1,136 @@
+{# Inline task edit form, shared between week_main.html and inbox_main.html.
+
+   Macro args:
+     - task: dict from task_to_dict (has title, project, estimate_label, tag_names_str)
+     - action_url: where the form posts (e.g. /w/<slug>/week/<ywk>/tasks/<id>/edit)
+     - target_id: id of the swappable wrapper to swap on success
+     - available_tags: list of tag names — drives the tags-field autocomplete
+     - available_projects: list of project names — drives the project-field autocomplete
+#}
+
+{% macro task_edit_form(task, action_url, target_id, available_tags, available_projects) %}
+<form
+  x-show="editing"
+  x-cloak
+  x-ref="editForm"
+  hx-post="{{ action_url }}"
+  hx-target="#{{ target_id }}"
+  hx-swap="outerHTML"
+  @keydown.escape.prevent="editing = false; $refs.editForm.reset()"
+  class="px-3 py-2.5 bg-slate-50">
+
+  <input
+    name="title"
+    value="{{ task.title|e }}"
+    required
+    class="w-full px-2 py-1 border border-slate-200 rounded text-[13px] mb-2 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+    placeholder="Task title" />
+
+  <div class="flex items-center gap-3 flex-wrap text-[12px]">
+
+    {# --- Tags input with autocomplete --- #}
+    <label class="flex items-center gap-1.5">
+      <span class="text-slate-500">Tags:</span>
+      <div
+        x-data='captureAutocomplete({{ available_tags|tojson }}, {{ available_projects|tojson }}, "tags")'
+        @click.outside="open = false"
+        class="relative">
+        <input
+          x-ref="formInput"
+          name="tags"
+          value="{{ task.tag_names_str|e }}"
+          autocomplete="off"
+          spellcheck="false"
+          @input="onInput($event)"
+          @keydown="onKeydown($event)"
+          :aria-expanded="open"
+          aria-autocomplete="list"
+          class="px-2 py-0.5 border border-slate-200 rounded font-mono w-44 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+          placeholder="space-separated" />
+        <div
+          x-show="open"
+          x-cloak
+          role="listbox"
+          class="absolute top-full left-0 mt-1 z-30 min-w-full bg-white border border-slate-200 rounded shadow-lg py-1">
+          <template x-for="(item, idx) in items" :key="item">
+            <button
+              type="button"
+              role="option"
+              :aria-selected="idx === selectedIndex"
+              @mousedown.prevent="accept(item, $refs.formInput)"
+              @mouseover="selectedIndex = idx"
+              :class="idx === selectedIndex ? 'bg-slate-100' : ''"
+              class="block w-full text-left px-3 py-1 text-[12px] hover:bg-slate-100 font-mono">
+              <span x-text="item"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+    </label>
+
+    {# --- Project input with autocomplete --- #}
+    <label class="flex items-center gap-1.5">
+      <span class="text-slate-500">Project:</span>
+      <div
+        x-data='captureAutocomplete({{ available_tags|tojson }}, {{ available_projects|tojson }}, "project")'
+        @click.outside="open = false"
+        class="relative">
+        <input
+          x-ref="formInput"
+          name="project"
+          value="{{ task.project|e if task.project else '' }}"
+          autocomplete="off"
+          spellcheck="false"
+          @input="onInput($event)"
+          @keydown="onKeydown($event)"
+          :aria-expanded="open"
+          aria-autocomplete="list"
+          class="px-2 py-0.5 border border-slate-200 rounded w-36 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+          placeholder="optional" />
+        <div
+          x-show="open"
+          x-cloak
+          role="listbox"
+          class="absolute top-full left-0 mt-1 z-30 min-w-full bg-white border border-slate-200 rounded shadow-lg py-1">
+          <template x-for="(item, idx) in items" :key="item">
+            <button
+              type="button"
+              role="option"
+              :aria-selected="idx === selectedIndex"
+              @mousedown.prevent="accept(item, $refs.formInput)"
+              @mouseover="selectedIndex = idx"
+              :class="idx === selectedIndex ? 'bg-slate-100' : ''"
+              class="block w-full text-left px-3 py-1 text-[12px] hover:bg-slate-100">
+              <span x-text="item"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+    </label>
+
+    {# --- Estimate input (no autocomplete; freeform '2h' or '30m') --- #}
+    <label class="flex items-center gap-1.5">
+      <span class="text-slate-500">Estimate:</span>
+      <input
+        name="estimate"
+        value="{{ task.estimate_label if task.estimate_label else '' }}"
+        class="px-2 py-0.5 border border-slate-200 rounded font-mono w-16 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+        placeholder="2h" />
+    </label>
+
+    <div class="ml-auto flex items-center gap-2">
+      <button
+        type="submit"
+        class="px-2.5 py-1 bg-slate-900 text-white rounded text-[12px] font-medium hover:bg-slate-800">
+        Save
+      </button>
+      <button
+        type="button"
+        @click="editing = false; $refs.editForm.reset()"
+        class="px-2.5 py-1 border border-slate-200 rounded text-[12px] text-slate-600 hover:bg-slate-50">
+        Cancel
+      </button>
+    </div>
+  </div>
+</form>
+{% endmacro %}

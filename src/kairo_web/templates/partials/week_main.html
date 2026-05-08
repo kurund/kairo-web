@@ -2,6 +2,8 @@
    replacing the #week-main wrapper via hx-target / hx-swap="outerHTML".
    Header + capture bar live in week.html (parent) so they don't get re-rendered. #}
 
+{% from "partials/_task_edit_form.html" import task_edit_form %}
+
 {%- macro tag_pill(name, color) -%}
   {%- set palette = {
     "red":    "bg-red-50 text-red-900",
@@ -220,62 +222,13 @@
                 class="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 text-sm leading-none px-1">×</button>
             </div>
 
-            {# Edit mode (inline form) #}
-            <form
-              x-show="editing"
-              x-cloak
-              x-ref="editForm"
-              hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/edit"
-              hx-target="#week-main"
-              hx-swap="outerHTML"
-              @keydown.escape.prevent="editing = false; $refs.editForm.reset()"
-              class="px-3 py-2.5 bg-slate-50">
-              <input
-                name="title"
-                value="{{ task.title|e }}"
-                required
-                class="w-full px-2 py-1 border border-slate-200 rounded text-[13px] mb-2 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
-                placeholder="Task title" />
-              <div class="flex items-center gap-3 flex-wrap text-[12px]">
-                <label class="flex items-center gap-1.5">
-                  <span class="text-slate-500">Tags:</span>
-                  <input
-                    name="tags"
-                    value="{{ task.tag_names_str|e }}"
-                    class="px-2 py-0.5 border border-slate-200 rounded font-mono w-44 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
-                    placeholder="space-separated" />
-                </label>
-                <label class="flex items-center gap-1.5">
-                  <span class="text-slate-500">Project:</span>
-                  <input
-                    name="project"
-                    value="{{ task.project|e if task.project else '' }}"
-                    class="px-2 py-0.5 border border-slate-200 rounded w-36 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
-                    placeholder="optional" />
-                </label>
-                <label class="flex items-center gap-1.5">
-                  <span class="text-slate-500">Estimate:</span>
-                  <input
-                    name="estimate"
-                    value="{{ task.estimate_label if task.estimate_label else '' }}"
-                    class="px-2 py-0.5 border border-slate-200 rounded font-mono w-16 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
-                    placeholder="2h" />
-                </label>
-                <div class="ml-auto flex items-center gap-2">
-                  <button
-                    type="submit"
-                    class="px-2.5 py-1 bg-slate-900 text-white rounded text-[12px] font-medium hover:bg-slate-800">
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    @click="editing = false; $refs.editForm.reset()"
-                    class="px-2.5 py-1 border border-slate-200 rounded text-[12px] text-slate-600 hover:bg-slate-50">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </form>
+            {{ task_edit_form(
+              task,
+              "/w/" ~ workspace.slug ~ "/week/" ~ year_week ~ "/tasks/" ~ task.id ~ "/edit",
+              "week-main",
+              available_tags,
+              available_projects,
+            ) }}
           </div>
         {% else %}
           <p class="text-[12px] text-slate-400 italic px-1 py-2">

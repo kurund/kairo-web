@@ -106,53 +106,91 @@
 
 {# Alpine component definition. Lives here (not app.js) so it can read context. #}
 <script>
-  function captureAutocomplete(allTags, allProjects) {
+  /**
+   * Suggestion-input Alpine component, reused by:
+   *   - the capture bar (inline #tag and @project syntax)
+   *   - the edit form's `tags` field (space-separated, no marker)
+   *   - the edit form's `project` field (single value, no marker)
+   *
+   * mode:
+   *   "capture" — current word starts with '#' or '@'; suggest from the matching pool
+   *   "tags"    — current space-separated word; suggest from tag pool
+   *   "project" — entire field value; suggest from project pool, accept replaces field
+   */
+  function captureAutocomplete(allTags, allProjects, mode) {
     return {
       open: false,
       items: [],
       selectedIndex: 0,
       allTags: allTags || [],
       allProjects: allProjects || [],
+      mode: mode || "capture",
 
       onInput(event) {
         const input = event.target;
         const text = input.value;
         const cursor = input.selectionStart ?? text.length;
-        const before = text.slice(0, cursor);
-        const wordStart = before.lastIndexOf(" ") + 1;
-        const word = before.slice(wordStart);
-
-        // Skip escape sequences (##, @@, ~~) — they're literal, not markers.
-        if (word.startsWith("##") || word.startsWith("@@") || word.startsWith("~~")) {
-          this.open = false;
-          return;
-        }
 
         let pool = null;
         let prefix = "";
-        if (word.startsWith("#")) {
+        let partial = "";
+
+        if (this.mode === "capture") {
+          const before = text.slice(0, cursor);
+          const wordStart = before.lastIndexOf(" ") + 1;
+          const word = before.slice(wordStart);
+          if (word.startsWith("##") || word.startsWith("@@") || word.startsWith("~~")) {
+            this.open = false;
+            return;
+          }
+          if (word.startsWith("#")) {
+            pool = this.allTags;
+            prefix = "#";
+            partial = word.slice(1).toLowerCase();
+          } else if (word.startsWith("@")) {
+            pool = this.allProjects;
+            prefix = "@";
+            partial = word.slice(1).toLowerCase();
+          } else {
+            this.open = false;
+            return;
+          }
+        } else if (this.mode === "tags") {
+          const before = text.slice(0, cursor);
+          const wordStart = before.lastIndexOf(" ") + 1;
+          const word = before.slice(wordStart);
+          if (word.length === 0) {
+            this.open = false;
+            return;
+          }
           pool = this.allTags;
-          prefix = "#";
-        } else if (word.startsWith("@")) {
+          // Allow optional leading '#' even though the field's contract is plain.
+          partial = (word.startsWith("#") ? word.slice(1) : word).toLowerCase();
+        } else if (this.mode === "project") {
+          if (text.length === 0) {
+            this.open = false;
+            return;
+          }
           pool = this.allProjects;
-          prefix = "@";
-        } else {
-          this.open = false;
-          return;
+          partial = (text.startsWith("@") ? text.slice(1) : text).toLowerCase();
         }
 
-        const partial = word.slice(1).toLowerCase();
-        // For projects, capture parser converts underscore → space, so we
-        // surface the matching project as @name_with_underscores.
-        this.items = pool
-          .filter((t) => {
-            const tl = t.toLowerCase();
-            return tl.startsWith(partial) && tl !== partial;
-          })
-          .slice(0, 6)
-          .map((t) => prefix + (prefix === "@" ? t.replace(/ /g, "_") : t));
-        this.open = this.items.length > 0;
-        this.selectedIndex = 0;
+        if (pool) {
+          this.items = pool
+            .filter((t) => {
+              const tl = t.toLowerCase();
+              return tl.startsWith(partial) && tl !== partial;
+            })
+            .slice(0, 6)
+            .map((t) =>
+              prefix +
+              (this.mode === "capture" && prefix === "@" ? t.replace(/ /g, "_") : t)
+            );
+          this.open = this.items.length > 0;
+          this.selectedIndex = 0;
+        } else {
+          this.open = false;
+        }
       },
 
       onKeydown(event) {
@@ -175,15 +213,23 @@
 
       accept(item, input) {
         if (!item) return;
-        const text = input.value;
-        const cursor = input.selectionStart ?? text.length;
-        const before = text.slice(0, cursor);
-        const after = text.slice(cursor);
-        const wordStart = before.lastIndexOf(" ") + 1;
-        const newText = text.slice(0, wordStart) + item + " " + after;
-        input.value = newText;
-        const newCursor = wordStart + item.length + 1;
-        input.selectionStart = input.selectionEnd = newCursor;
+        if (this.mode === "project") {
+          // Project field is a single value — replace the whole input.
+          input.value = item;
+          input.selectionStart = input.selectionEnd = item.length;
+        } else {
+          // Capture + tags: replace just the current word, append a space so
+          // the user can keep typing more tags fluently.
+          const text = input.value;
+          const cursor = input.selectionStart ?? text.length;
+          const before = text.slice(0, cursor);
+          const after = text.slice(cursor);
+          const wordStart = before.lastIndexOf(" ") + 1;
+          const newText = text.slice(0, wordStart) + item + " " + after;
+          input.value = newText;
+          const newCursor = wordStart + item.length + 1;
+          input.selectionStart = input.selectionEnd = newCursor;
+        }
         this.open = false;
         input.focus();
       },

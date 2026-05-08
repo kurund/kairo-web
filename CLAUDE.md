@@ -62,7 +62,7 @@ src/kairo_web/
   workspace_meta.py  # color palette + HSL math (derive bg/fg from accent hex)
   cli.py             # Click CLI: init, migrate-v1, rollover
   routes/
-    pages.py         # GET /, /login, /w/{slug}/week/{ywk}, /preview
+    pages.py         # GET /, /login, /w/{slug}/week/{ywk}, /w/{slug}/inbox
     tasks.py         # POST mutation endpoints (HTMX, return partial)
     workspaces.py    # stub
     digest.py        # stub
@@ -104,7 +104,6 @@ The app has **two peer pages per workspace**: a week view and an inbox view. Eac
 | POST | `/w/{slug}/inbox/tasks` | create in inbox — inbox partial |
 | POST | `/w/{slug}/inbox/tasks/{id}/complete\|edit\|delete` | mutate — inbox partial |
 | POST | `/w/{slug}/inbox/tasks/{id}/schedule` | move to current ISO week — inbox partial |
-| GET | `/preview[?ws=…]` | layout preview against hardcoded data |
 | GET | `/healthz` | `{"ok": true, "db": true}` |
 
 **Week endpoints embed `ywk` in the path; inbox endpoints don't have a week to embed.** Mutation endpoints reuse the path context to know which partial to re-render. Filters (and inbox sort) are extracted from the `HX-Current-URL` header so HTMX mutations preserve them automatically.
@@ -268,7 +267,6 @@ Hostinger VPS via Caddy (auto-HTTPS) + systemd + `sqlite3 .backup` cron. Files i
 
 - `app.css` is a placeholder; Tailwind ships via Play CDN, which is fine for dev but should be replaced with a real Tailwind CLI build before shipping to production. The `.gitignore` no longer excludes `app.css` — when the CLI build is added, switch the build output target so it doesn't clobber the placeholder.
 - Auth is not enforced on any route. The app assumes single-user, local-first usage. Before VPS deploy, add session-cookie middleware and gate `/w/...` routes.
-- The `/preview` route still exists and renders against hardcoded data; useful for layout iteration without DB. Keep it working.
 
 ## Working with this repo
 
