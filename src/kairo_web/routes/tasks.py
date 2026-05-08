@@ -23,12 +23,12 @@ from sqlmodel import Session, select
 from kairo_web.db import get_session
 from kairo_web.models import Tag, Task, TaskTag
 from kairo_web.paths import TEMPLATE_DIR
-from kairo_web.request_filters import extract_week_filters
+from kairo_web.request_filters import extract_inbox_filters, extract_week_filters
 from kairo_web.services import queries
 from kairo_web.services.capture import parse_capture
 from kairo_web.services.rollover import rollover_workspace
-from kairo_web.utils import shift_iso_week
-from kairo_web.view_context import build_week_context
+from kairo_web.utils import get_current_iso_week, shift_iso_week
+from kairo_web.view_context import build_inbox_context, build_week_context
 
 router = APIRouter(tags=["tasks"])
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
@@ -68,6 +68,24 @@ def _render_partial(
         filter_tag=filter_tag, filter_project=filter_project,
     )
     return templates.TemplateResponse(request, "partials/week_main.html", ctx)
+
+
+def _render_inbox_partial(
+    request: Request,
+    session: Session,
+    workspace_slug: str,
+) -> HTMLResponse:
+    """Re-render the swappable #inbox-main partial after a mutation.
+
+    Filter + sort state are extracted from HX-Current-URL so they survive
+    mutations transparently, just like on the week page.
+    """
+    filter_tag, filter_project, sort = extract_inbox_filters(request)
+    ctx = build_inbox_context(
+        session, workspace_slug,
+        filter_tag=filter_tag, filter_project=filter_project, sort=sort,
+    )
+    return templates.TemplateResponse(request, "partials/inbox_main.html", ctx)
 
 
 def _next_position(session: Session, workspace_id: int, iso_year: int | None, iso_week: int | None) -> int:
@@ -433,3 +451,171 @@ def delete_task(
     session.commit()
 
     return _render_partial(request, session, workspace_slug, year_week)
+
+
+# ===== Inbox endpoints =====================================================
+# Paired with the week endpoints above. Same mutation logic, but the response
+# renders partials/inbox_main.html instead of partials/week_main.html.
+
+
+@router.post("/w/{workspace_slug}/inbox/tasks", response_class=HTMLResponse)
+def inbox_create_task(
+    request: Request,
+    workspace_slug: str,
+    capture_text: str = Form(""),
+    destination: str = Form("inbox"),  # accepted for parity; inbox always uses inbox
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Capture a task into the workspace inbox. Empty input is a silent no-op."""
+    workspace = queries.get_workspace(session, workspace_slug)
+    if workspace is None or workspace.id is None:
+        raise HTTPException(status_code=404, detail=f"workspace '{workspace_slug}' not found")
+
+    parsed = parse_capture(capture_text)
+    if parsed.title.strip():
+        position = _next_position(session, workspace.id, None, None)
+        task = Task(
+            workspace_id=workspace.id,
+            title=parsed.title,
+            project=parsed.project,
+            estimate_hours=parsed.estimate_hours,
+            position=position,
+            iso_year=None,
+            iso_week=None,
+            created_at=_utcnow(),
+        )
+        session.add(task)
+        session.flush()
+        assert task.id is not None
+        for tag in _ensure_tags(session, workspace.id, parsed.tags):
+            assert tag.id is not None
+            session.add(TaskTag(task_id=task.id, tag_id=tag.id))
+        session.commit()
+
+    return _render_inbox_partial(request, session, workspace_slug)
+
+
+@router.post(
+    "/w/{workspace_slug}/inbox/tasks/{task_id}/complete",
+    response_class=HTMLResponse,
+)
+def inbox_toggle_complete(
+    request: Request,
+    workspace_slug: str,
+    task_id: int,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    workspace = queries.get_workspace(session, workspace_slug)
+    if workspace is None or workspace.id is None:
+        raise HTTPException(status_code=404, detail="workspace not found")
+    task = _get_task_for_workspace(session, task_id, workspace.id)
+
+    if task.status == "completed":
+        task.status = "open"
+        task.completed_at = None
+    else:
+        task.status = "completed"
+        task.completed_at = _utcnow()
+    session.add(task)
+    session.commit()
+    return _render_inbox_partial(request, session, workspace_slug)
+
+
+@router.post(
+    "/w/{workspace_slug}/inbox/tasks/{task_id}/edit",
+    response_class=HTMLResponse,
+)
+def inbox_edit_task(
+    request: Request,
+    workspace_slug: str,
+    task_id: int,
+    title: str = Form(""),
+    tags: str = Form(""),
+    project: str = Form(""),
+    estimate: str = Form(""),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Same edit logic as the week endpoint; renders the inbox partial."""
+    workspace = queries.get_workspace(session, workspace_slug)
+    if workspace is None or workspace.id is None:
+        raise HTTPException(status_code=404, detail="workspace not found")
+    task = _get_task_for_workspace(session, task_id, workspace.id)
+
+    title_clean = title.strip()
+    if not title_clean:
+        return _render_inbox_partial(request, session, workspace_slug)
+
+    task.title = title_clean
+    task.project = project.strip() or None
+    task.estimate_hours = _parse_estimate_text(estimate)
+
+    new_names: list[str] = []
+    for raw in tags.split():
+        name = raw.strip().lstrip("#").lower()
+        if not name:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", name):
+            continue
+        if name not in new_names:
+            new_names.append(name)
+
+    session.exec(delete(TaskTag).where(TaskTag.task_id == task.id))  # type: ignore[arg-type]
+    for tag in _ensure_tags(session, workspace.id, new_names):
+        assert tag.id is not None
+        session.add(TaskTag(task_id=task.id, tag_id=tag.id))
+
+    session.add(task)
+    session.commit()
+    return _render_inbox_partial(request, session, workspace_slug)
+
+
+@router.post(
+    "/w/{workspace_slug}/inbox/tasks/{task_id}/delete",
+    response_class=HTMLResponse,
+)
+def inbox_delete_task(
+    request: Request,
+    workspace_slug: str,
+    task_id: int,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    workspace = queries.get_workspace(session, workspace_slug)
+    if workspace is None or workspace.id is None:
+        raise HTTPException(status_code=404, detail="workspace not found")
+    task = _get_task_for_workspace(session, task_id, workspace.id)
+
+    session.exec(delete(TaskTag).where(TaskTag.task_id == task.id))  # type: ignore[arg-type]
+    session.delete(task)
+    session.commit()
+    return _render_inbox_partial(request, session, workspace_slug)
+
+
+@router.post(
+    "/w/{workspace_slug}/inbox/tasks/{task_id}/schedule",
+    response_class=HTMLResponse,
+)
+def inbox_schedule_to_current_week(
+    request: Request,
+    workspace_slug: str,
+    task_id: int,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Schedule an inbox task into the current ISO week (the user's local week).
+
+    No-op if the task is already scheduled (defensive: shouldn't happen via UI
+    since this endpoint is only reachable from the inbox row).
+    """
+    workspace = queries.get_workspace(session, workspace_slug)
+    if workspace is None or workspace.id is None:
+        raise HTTPException(status_code=404, detail="workspace not found")
+    task = _get_task_for_workspace(session, task_id, workspace.id)
+
+    if task.iso_year is None and task.iso_week is None:
+        target_year, target_week = get_current_iso_week()
+        task.iso_year = target_year
+        task.iso_week = target_week
+        task.position = _next_position(session, workspace.id, target_year, target_week)
+        session.add(task)
+        session.commit()
+
+    return _render_inbox_partial(request, session, workspace_slug)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
@@ -83,8 +84,24 @@ def list_project_names(session: Session, workspace_id: int) -> list[str]:
     return [p for p in rows if p]
 
 
-def get_inbox_tasks(session: Session, workspace_id: int) -> list[Task]:
-    """Return inbox tasks (week IS NULL)."""
+def get_inbox_tasks(
+    session: Session,
+    workspace_id: int,
+    *,
+    filter_tag: Optional[str] = None,
+    filter_project: Optional[str] = None,
+    sort: str = "newest",
+) -> list[Task]:
+    """Return inbox tasks (week IS NULL).
+
+    Default ordering puts incomplete first (status DESC: 'open' > 'completed'),
+    then applies the chosen `sort`:
+
+      - "newest" (default): newest captures at top
+      - "oldest":           oldest first (surface neglected items)
+      - "project":          project ASC, then title
+      - "title":            title ASC
+    """
     stmt = (
         select(Task)
         .where(
@@ -93,9 +110,46 @@ def get_inbox_tasks(session: Session, workspace_id: int) -> list[Task]:
             Task.iso_week.is_(None),
         )
         .options(selectinload(Task.tags))
-        .order_by(Task.status.desc(), Task.position.asc(), Task.created_at.asc())
     )
+
+    if filter_project:
+        stmt = stmt.where(Task.project == filter_project)
+    if filter_tag:
+        tag_subq = (
+            select(TaskTag.task_id)
+            .join(Tag, Tag.id == TaskTag.tag_id)
+            .where(Tag.workspace_id == workspace_id, Tag.name == filter_tag)
+        )
+        stmt = stmt.where(Task.id.in_(tag_subq))  # type: ignore[attr-defined]
+
+    # Always: open tasks above completed.
+    stmt = stmt.order_by(Task.status.desc())
+
+    if sort == "oldest":
+        stmt = stmt.order_by(Task.created_at.asc(), Task.id.asc())
+    elif sort == "project":
+        # COALESCE pushes null-project rows to the bottom so the named projects
+        # group together at the top. SQLite has no native NULLS LAST.
+        stmt = stmt.order_by(
+            func.coalesce(Task.project, "￿").asc(),
+            func.lower(Task.title).asc(),
+        )
+    elif sort == "title":
+        stmt = stmt.order_by(func.lower(Task.title).asc())
+    else:  # "newest" (default)
+        stmt = stmt.order_by(Task.created_at.desc(), Task.id.desc())
+
     return list(session.exec(stmt).all())
+
+
+# Sort keys allowed in URLs. Anything else falls back to 'newest'.
+INBOX_SORT_KEYS: tuple[str, ...] = ("newest", "oldest", "project", "title")
+INBOX_SORT_LABELS: dict[str, str] = {
+    "newest": "Newest first",
+    "oldest": "Oldest first",
+    "project": "By project",
+    "title": "Title (A–Z)",
+}
 
 
 def get_workspace_badges(
@@ -116,3 +170,18 @@ def get_workspace_badges(
     for ws_id, _ in session.exec(stmt).all():
         counts[ws_id] = counts.get(ws_id, 0) + 1
     return counts
+
+
+def count_inbox_tasks(session: Session, workspace_id: int) -> int:
+    """Total inbox count (unfiltered, all statuses) — drives the 'Inbox · N' tab badge."""
+    return len(
+        list(
+            session.exec(
+                select(Task.id).where(
+                    Task.workspace_id == workspace_id,
+                    Task.iso_year.is_(None),
+                    Task.iso_week.is_(None),
+                )
+            ).all()
+        )
+    )

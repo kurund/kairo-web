@@ -1,0 +1,121 @@
+{# Shared header bar — used by both week.html and inbox.html.
+
+   Required context:
+     - workspace: dict with slug, name, color_hex, color_bg, color_fg
+     - workspaces: list of dicts (workspace_dict shape) for switcher
+     - active_tab: "week" | "inbox"
+     - inbox_count: int (badge on Inbox tab)
+     - inbox_url: URL for Inbox tab
+     - week_url_for_tab: URL for Week tab (current week, preserves filter on week page)
+
+   Required only when active_tab == "week":
+     - prev_week_url, next_week_url, today_url, week_label
+     - workspace.slug, year_week (for the Roll-forward button)
+#}
+
+<div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 gap-4">
+  {# --- Workspace switcher --- #}
+  <div
+    x-data="{ open: false }"
+    @click.outside="open = false"
+    @keydown.escape="open = false"
+    class="relative">
+    <button
+      @click="open = !open"
+      type="button"
+      aria-haspopup="menu"
+      :aria-expanded="open"
+      class="px-2.5 py-1.5 inline-flex items-center gap-2 rounded hover:bg-slate-50 border-b-2 -mb-px"
+      :class="open && 'bg-slate-50'"
+      style="border-color: {{ workspace.color_hex }};">
+      <span class="text-[13px] font-medium text-slate-900">{{ workspace.name }}</span>
+      {% if workspace.badge_count %}
+        <span class="text-[11px] font-medium px-1.5 py-px rounded-full" style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ workspace.badge_count }}</span>
+      {% endif %}
+      <svg class="w-3 h-3 text-slate-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+      </svg>
+    </button>
+
+    <div
+      x-show="open"
+      x-transition.opacity.duration.150ms
+      x-cloak
+      role="menu"
+      class="absolute left-0 mt-1 min-w-[220px] bg-white border border-slate-200 rounded-md shadow-lg py-1 z-20">
+      {% for ws in workspaces %}
+        <a
+          href="{% if active_tab == 'inbox' %}/w/{{ ws.slug }}/inbox{% else %}/w/{{ ws.slug }}/week/{{ year_week }}{% endif %}"
+          role="menuitem"
+          class="flex items-center gap-2.5 px-3 py-1.5 text-[13px] hover:bg-slate-50 {% if ws.slug == workspace.slug %}bg-slate-50{% endif %}">
+          <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {{ ws.color_hex }};"></span>
+          <span class="flex-1 truncate {% if ws.slug == workspace.slug %}font-medium text-slate-900{% else %}text-slate-700{% endif %}">{{ ws.name }}</span>
+          {% if ws.badge_count %}
+            <span class="text-[10px] font-medium px-1.5 py-px rounded-full" style="background: {{ ws.color_bg }}; color: {{ ws.color_fg }};">{{ ws.badge_count }}</span>
+          {% endif %}
+          {% if ws.slug == workspace.slug %}
+            <svg class="w-3 h-3 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+          {% endif %}
+        </a>
+      {% endfor %}
+      <div class="border-t border-slate-100 mt-1 pt-1">
+        <a
+          href="/settings/workspaces"
+          role="menuitem"
+          class="flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+          <span class="w-2 h-2 inline-flex items-center justify-center text-slate-500">+</span>
+          <span>Manage workspaces</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# --- Tabs: Inbox | Week --- #}
+  <nav class="flex items-center gap-1" role="tablist">
+    <a
+      href="{{ inbox_url }}"
+      role="tab"
+      aria-selected="{{ 'true' if active_tab == 'inbox' else 'false' }}"
+      class="px-2.5 py-1.5 text-[13px] inline-flex items-center gap-1.5 border-b-2 -mb-px
+             {% if active_tab == 'inbox' %}font-medium text-slate-900{% else %}text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-50 rounded{% endif %}"
+      {% if active_tab == 'inbox' %}style="border-color: {{ workspace.color_hex }};"{% endif %}>
+      <span>Inbox</span>
+      {% if inbox_count %}
+        <span class="text-[11px] font-medium px-1.5 py-px rounded-full"
+              style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ inbox_count }}</span>
+      {% endif %}
+    </a>
+    <a
+      href="{{ week_url_for_tab }}"
+      role="tab"
+      aria-selected="{{ 'true' if active_tab == 'week' else 'false' }}"
+      class="px-2.5 py-1.5 text-[13px] border-b-2 -mb-px
+             {% if active_tab == 'week' %}font-medium text-slate-900{% else %}text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-50 rounded{% endif %}"
+      {% if active_tab == 'week' %}style="border-color: {{ workspace.color_hex }};"{% endif %}>
+      Week
+    </a>
+  </nav>
+
+  {# --- Week navigation (only on the Week tab) --- #}
+  {% if active_tab == 'week' %}
+    <div class="flex items-center gap-1.5 text-slate-600">
+      <a href="{{ prev_week_url }}" class="w-6 h-6 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-slate-50" title="Previous week">‹</a>
+      <span class="text-[13px] font-medium text-slate-900 min-w-[160px] text-center">{{ week_label }}</span>
+      <a href="{{ next_week_url }}" class="w-6 h-6 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-slate-50" title="Next week">›</a>
+      <a href="{{ today_url }}" class="ml-1 px-2 py-0.5 text-[12px] border border-slate-200 rounded hover:bg-slate-50" title="Jump to current week (g)">Today</a>
+      <button
+        type="button"
+        hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/rollover"
+        hx-target="#week-main"
+        hx-swap="outerHTML"
+        hx-confirm="Move all open tasks from this week to next week?"
+        class="ml-1 px-2 py-0.5 text-[12px] border border-slate-200 rounded hover:bg-slate-50 text-slate-600"
+        title="Move all open tasks in this week to next week (auto-runs Sunday 23:59)">
+        Roll forward →
+      </button>
+    </div>
+  {% else %}
+    {# Spacer keeps the right side balanced when there's no week-nav. #}
+    <span></span>
+  {% endif %}
+</div>

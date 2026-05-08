@@ -90,27 +90,35 @@ tests/               # pytest — capture parser + route smoke tests
 
 ### Routing pattern
 
+The app has **two peer pages per workspace**: a week view and an inbox view. Each has its own swappable partial (`#week-main` / `#inbox-main`) and its own paired set of mutation endpoints. They share the topbar (`partials/_topbar.html`) and capture bar (`partials/_capture.html`), differing only in which tab is active and what URL the capture form posts to.
+
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/` | redirect to `/w/fulltime/week/<current>` |
+| GET | `/` | redirect to `/w/<default-workspace>/week/<current>` |
 | GET | `/login` | login page (stub) |
-| GET | `/w/{slug}/week/{YYYY-WNN}` | full week page (HTML document) |
-| POST | `/w/{slug}/week/{YYYY-WNN}/tasks` | create — partial |
-| POST | `/w/{slug}/week/{YYYY-WNN}/tasks/{id}/complete` | toggle — partial |
-| POST | `/w/{slug}/week/{YYYY-WNN}/tasks/{id}/today` | toggle — partial |
-| POST | `/w/{slug}/week/{YYYY-WNN}/tasks/{id}/schedule` | toggle inbox/week — partial |
-| POST | `/w/{slug}/week/{YYYY-WNN}/tasks/{id}/move` | swap with neighbor — partial |
-| POST | `/w/{slug}/week/{YYYY-WNN}/tasks/{id}/delete` | delete — partial |
+| GET | `/w/{slug}/week/{YYYY-WNN}` | week page |
+| GET | `/w/{slug}/inbox` | inbox page |
+| POST | `/w/{slug}/week/{YYYY-WNN}/tasks` | create — week partial |
+| POST | `/w/{slug}/week/{YYYY-WNN}/tasks/{id}/complete\|today\|schedule\|move\|delete\|edit` | mutate — week partial |
+| POST | `/w/{slug}/week/{YYYY-WNN}/rollover` | move open tasks to next week — week partial |
+| POST | `/w/{slug}/inbox/tasks` | create in inbox — inbox partial |
+| POST | `/w/{slug}/inbox/tasks/{id}/complete\|edit\|delete` | mutate — inbox partial |
+| POST | `/w/{slug}/inbox/tasks/{id}/schedule` | move to current ISO week — inbox partial |
 | GET | `/preview[?ws=…]` | layout preview against hardcoded data |
 | GET | `/healthz` | `{"ok": true, "db": true}` |
 
-**The week URL embeds context (`slug`, `ywk`).** Mutation endpoints reuse it to know which view to re-render — there is no separate "current view" cookie.
+**Week endpoints embed `ywk` in the path; inbox endpoints don't have a week to embed.** Mutation endpoints reuse the path context to know which partial to re-render. Filters (and inbox sort) are extracted from the `HX-Current-URL` header so HTMX mutations preserve them automatically.
 
 ### HTMX flow
 
-Mutations return the `partials/week_main.html` partial, replacing `#week-main` via `hx-target="#week-main" hx-swap="outerHTML"`. The capture bar lives **outside** `#week-main` so it stays focused across swaps.
+Mutations return either `partials/week_main.html` (replacing `#week-main`) or `partials/inbox_main.html` (replacing `#inbox-main`), depending on which page the user is on. The shared **topbar** (`partials/_topbar.html`) and **capture bar** (`partials/_capture.html`) live **outside** the swappable region so they stay stable + the input stays focused across swaps.
 
-The reusable context-builder is `routes/tasks.py::_build_partial_context()`. Page route `routes/pages.py::get_week()` and partial route both go through equivalent code paths — keep them in sync if one changes.
+Context builders in `view_context.py`:
+
+- `build_week_context(...)` — feeds `week.html` and `partials/week_main.html`
+- `build_inbox_context(...)` — feeds `inbox.html` and `partials/inbox_main.html`
+
+Both produce a dict with the same shape keys consumed by the topbar (`active_tab`, `inbox_count`, `inbox_url`, `week_url_for_tab`, `workspaces`, etc.) so the shared partials don't care which page is rendering.
 
 ## Key patterns and conventions
 

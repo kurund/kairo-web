@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ workspace.name }} — Week {{ iso_week }}, {{ iso_year }}{% endblock %}
+{% block title %}{{ workspace.name }} — Inbox{% endblock %}
 
 {% block content %}
 <main class="max-w-5xl mx-auto p-6">
@@ -8,11 +8,11 @@
 
     {% include "partials/_topbar.html" %}
     {% include "partials/_capture.html" %}
-    {% include "partials/week_main.html" %}
+    {% include "partials/inbox_main.html" %}
   </div>
 
   <p class="mt-4 text-center text-xs text-slate-400">
-    Live data · workspace <code class="px-1 rounded bg-slate-100">{{ workspace.slug }}</code> · {{ year_week }}
+    Inbox · workspace <code class="px-1 rounded bg-slate-100">{{ workspace.slug }}</code>
   </p>
 </main>
 {% endblock %}

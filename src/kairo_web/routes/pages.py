@@ -26,7 +26,7 @@ from kairo_web.utils import (
     format_week_label,
     get_current_iso_week,
 )
-from kairo_web.view_context import build_week_context, workspace_dict
+from kairo_web.view_context import build_inbox_context, build_week_context, workspace_dict
 
 router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
@@ -117,6 +117,28 @@ def get_week(
         filter_tag=filter_tag, filter_project=filter_project,
     )
     return templates.TemplateResponse(request, "week.html", ctx)
+
+
+@router.get("/w/{workspace_slug}/inbox", response_class=HTMLResponse)
+def get_inbox(
+    request: Request,
+    workspace_slug: str,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Inbox page for a workspace — capture-and-triage view, peer of the week page.
+
+    Optional query params:
+      ?tag=<name>      — restrict to inbox tasks with that tag
+      ?project=<name>  — restrict to that project
+      ?sort=<key>      — newest|oldest|project|title (default: newest)
+    """
+    filter_tag, filter_project = extract_week_filters(request)
+    sort = request.query_params.get("sort") or "newest"
+    ctx = build_inbox_context(
+        session, workspace_slug,
+        filter_tag=filter_tag, filter_project=filter_project, sort=sort,
+    )
+    return templates.TemplateResponse(request, "inbox.html", ctx)
 
 
 # ----- Preview (dummy data, no DB) ------------------------------------------

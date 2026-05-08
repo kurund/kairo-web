@@ -1,0 +1,45 @@
+{# Shared capture bar.
+
+   Required context:
+     - capture_action_url: where the form posts (POST endpoint that creates a task)
+     - main_target_id: id of the swappable wrapper on the current page
+       ('week-main' or 'inbox-main')
+     - show_this_week_button: bool — true on the week page (lets user schedule directly),
+       false on the inbox page (no week context). #}
+
+<div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+  <form
+    hx-post="{{ capture_action_url }}"
+    hx-target="#{{ main_target_id }}"
+    hx-swap="outerHTML"
+    hx-on::after-request="if (event.detail.successful) { this.reset(); this.querySelector('input[name=capture_text]').focus(); }"
+    class="flex items-center gap-2">
+    <span class="text-slate-400 font-medium select-none" title="Press / to focus">/</span>
+    <input
+      id="capture-input"
+      type="text"
+      name="capture_text"
+      placeholder="Capture — Enter sends to inbox · supports #tag @project ~Nh"
+      autocomplete="off"
+      class="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded text-[13px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+    />
+    <button
+      type="submit"
+      name="destination"
+      value="inbox"
+      class="text-[12px] px-2.5 py-1.5 bg-slate-900 text-white rounded hover:bg-slate-800"
+      title="Default. Enter on the input also does this.">
+      + Inbox
+    </button>
+    {% if show_this_week_button %}
+      <button
+        type="submit"
+        name="destination"
+        value="week"
+        class="text-[12px] px-2.5 py-1.5 border border-slate-200 text-slate-700 rounded hover:bg-slate-50"
+        title="Schedule directly into the viewed week (skips triage)">
+        This week
+      </button>
+    {% endif %}
+  </form>
+</div>

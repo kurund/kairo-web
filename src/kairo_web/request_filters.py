@@ -29,6 +29,23 @@ def extract_week_filters(request: Request) -> tuple[Optional[str], Optional[str]
     )
 
 
+def extract_inbox_filters(request: Request) -> tuple[Optional[str], Optional[str], str]:
+    """Return (filter_tag, filter_project, sort). Sort defaults to 'newest'."""
+    hx_url = request.headers.get("HX-Current-URL")
+    if hx_url:
+        params = parse_qs(urlparse(hx_url).query)
+        return (
+            _first_or_none(params.get("tag")),
+            _first_or_none(params.get("project")),
+            _first_or_none(params.get("sort")) or "newest",
+        )
+    return (
+        request.query_params.get("tag") or None,
+        request.query_params.get("project") or None,
+        request.query_params.get("sort") or "newest",
+    )
+
+
 def _first_or_none(values: Optional[list[str]]) -> Optional[str]:
     if not values:
         return None

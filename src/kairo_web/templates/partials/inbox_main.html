@@ -1,0 +1,253 @@
+{# Swappable body of the inbox view. Mutation endpoints return this partial,
+   replacing the #inbox-main wrapper via hx-target / hx-swap="outerHTML".
+   Header + capture bar live in inbox.html (parent) so they don't get re-rendered. #}
+
+{%- macro tag_pill(name, color) -%}
+  {%- set palette = {
+    "red":    "bg-red-50 text-red-900",
+    "teal":   "bg-teal-50 text-teal-900",
+    "indigo": "bg-indigo-50 text-indigo-900",
+    "slate":  "bg-slate-100 text-slate-700",
+    "amber":  "bg-amber-50 text-amber-900",
+    "pink":   "bg-pink-50 text-pink-900",
+  } -%}
+  <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full {{ palette.get(color, palette['slate']) }}">{{ name }}</span>
+{%- endmacro -%}
+
+{%- macro status_button(task, accent_hex, slug) -%}
+  <button
+    type="button"
+    hx-post="/w/{{ slug }}/inbox/tasks/{{ task.id }}/complete"
+    hx-target="#inbox-main"
+    hx-swap="outerHTML"
+    aria-label="{{ 'Reopen' if task.status == 'completed' else 'Complete' }} task"
+    class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm flex-shrink-0 transition-colors hover:opacity-80 cursor-pointer p-0 border-0 bg-transparent"
+    {% if task.status != 'completed' %}style="border: 1.5px solid #94a3b8;"{% endif %}>
+    {%- if task.status == 'completed' -%}
+      <span class="inline-flex w-3.5 h-3.5 rounded-sm items-center justify-center text-white text-[8px] leading-none" style="background: {{ accent_hex }}; border: 1.5px solid {{ accent_hex }};">✓</span>
+    {%- endif -%}
+  </button>
+{%- endmacro -%}
+
+<div id="inbox-main">
+
+  {# --- Filter + sort row --- #}
+  <div class="px-4 py-2 border-b border-slate-100 bg-white flex items-center gap-2 flex-wrap text-[12px]">
+    <span class="text-slate-500 mr-1">Filter:</span>
+
+    {% if filter_tag %}
+      <a href="{{ tag_remove_url }}"
+         class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-900 text-white hover:bg-slate-700 transition"
+         title="Remove tag filter">
+        <span>#{{ filter_tag }}</span>
+        <span class="text-slate-300">✕</span>
+      </a>
+    {% endif %}
+
+    {% if filter_project %}
+      <a href="{{ project_remove_url }}"
+         class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-900 text-white hover:bg-slate-700 transition"
+         title="Remove project filter">
+        <span>@{{ filter_project }}</span>
+        <span class="text-slate-300">✕</span>
+      </a>
+    {% endif %}
+
+    {% if available_tags %}
+      <div x-data="{ open: false }" @click.outside="open = false" @keydown.escape="open = false" class="relative">
+        <button @click="open = !open" type="button"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50">
+          <span>{% if filter_tag %}Change tag{% else %}+ Tag{% endif %}</span>
+          <svg class="w-2.5 h-2.5" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="open" x-transition.opacity.duration.150ms x-cloak role="menu"
+             class="absolute left-0 mt-1 min-w-[160px] bg-white border border-slate-200 rounded-md shadow-lg py-1 z-20 max-h-60 overflow-y-auto">
+          {% for opt in tag_options %}
+            <a href="{{ opt.url }}" role="menuitem"
+               class="block px-3 py-1 text-[12px] hover:bg-slate-50 {% if opt.is_active %}bg-slate-50 font-medium{% endif %}">
+              #{{ opt.name }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if available_projects %}
+      <div x-data="{ open: false }" @click.outside="open = false" @keydown.escape="open = false" class="relative">
+        <button @click="open = !open" type="button"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50">
+          <span>{% if filter_project %}Change project{% else %}+ Project{% endif %}</span>
+          <svg class="w-2.5 h-2.5" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="open" x-transition.opacity.duration.150ms x-cloak role="menu"
+             class="absolute left-0 mt-1 min-w-[180px] bg-white border border-slate-200 rounded-md shadow-lg py-1 z-20 max-h-60 overflow-y-auto">
+          {% for opt in project_options %}
+            <a href="{{ opt.url }}" role="menuitem"
+               class="block px-3 py-1 text-[12px] hover:bg-slate-50 {% if opt.is_active %}bg-slate-50 font-medium{% endif %}">
+              @{{ opt.name }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if not available_tags and not available_projects and not filter_active %}
+      <span class="text-slate-400 italic">none yet — add <code class="bg-slate-100 px-1 rounded">#tag</code> or <code class="bg-slate-100 px-1 rounded">@project</code> in the capture bar</span>
+    {% endif %}
+
+    {# Sort dropdown — pushed to the right. #}
+    <div class="ml-auto flex items-center gap-2.5">
+      {% if filter_active %}
+        <span class="text-slate-500">
+          <span>showing <strong class="text-slate-900 font-medium">{{ inbox_tasks | length }}</strong> of {{ inbox_total }}</span>
+          <a href="{{ clear_all_filters_url }}" class="text-slate-600 hover:text-slate-900 underline ml-1.5">Clear</a>
+        </span>
+      {% endif %}
+      <div x-data="{ open: false }" @click.outside="open = false" @keydown.escape="open = false" class="relative">
+        <button @click="open = !open" type="button"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50">
+          <span>Sort: {{ sort_label }}</span>
+          <svg class="w-2.5 h-2.5" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="open" x-transition.opacity.duration.150ms x-cloak role="menu"
+             class="absolute right-0 mt-1 min-w-[160px] bg-white border border-slate-200 rounded-md shadow-lg py-1 z-20">
+          {% for opt in sort_options %}
+            <a href="{{ opt.url }}" role="menuitem"
+               class="block px-3 py-1 text-[12px] hover:bg-slate-50 {% if opt.is_active %}bg-slate-50 font-medium{% endif %}">
+              {{ opt.label }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# --- Inbox task list --- #}
+  <div class="p-3">
+    <div class="flex items-center justify-between mb-1.5">
+      <span class="text-[11px] font-medium uppercase tracking-wider text-slate-600">Inbox</span>
+      <span class="text-[11px] text-slate-400">{{ inbox_total }} task{{ '' if inbox_total == 1 else 's' }}</span>
+    </div>
+    <div class="flex flex-col">
+      {% for task in inbox_tasks %}
+        <div
+          x-data="{ editing: false }"
+          x-effect="if (editing) $nextTick(() => $el.querySelector('input[name=title]')?.focus())"
+          class="group border-b border-slate-100">
+
+          {# View mode #}
+          <div x-show="!editing"
+               class="grid grid-cols-[18px_1fr_auto_auto_auto] gap-2.5 items-center px-1 py-1.5 hover:bg-slate-50 {% if task.status == 'completed' %}opacity-60{% endif %}">
+            {{ status_button(task, workspace.color_hex, workspace.slug) }}
+            <div
+              @click="editing = true"
+              @keydown.enter.prevent="editing = true"
+              @keydown.space.prevent="editing = true"
+              role="button"
+              tabindex="0"
+              aria-label="Edit task"
+              title="Click to edit"
+              class="min-w-0 cursor-pointer">
+              <div class="text-[13px] {% if task.status == 'completed' %}line-through{% endif %}">{{ task.title }}</div>
+              {% if task.tags or task.project %}
+                <div class="flex gap-1.5 mt-0.5 items-center flex-wrap">
+                  {% for tag in task.tags %}{{ tag_pill(tag.name, tag.color) }}{% endfor %}
+                  {% if task.project %}<span class="text-[11px] text-slate-400">@{{ task.project }}</span>{% endif %}
+                </div>
+              {% endif %}
+            </div>
+            <span class="text-[11px] text-slate-400 tabular-nums">{% if task.estimate_hours %}{{ task.estimate_label }}{% endif %}</span>
+            <button
+              type="button"
+              hx-post="/w/{{ workspace.slug }}/inbox/tasks/{{ task.id }}/schedule"
+              hx-target="#inbox-main"
+              hx-swap="outerHTML"
+              aria-label="Schedule into the current week"
+              title="Schedule into this week"
+              class="text-[10px] font-medium px-1.5 py-0.5 rounded text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-60 hover:opacity-100 inline-flex items-center gap-1"
+              style="color: {{ workspace.color_hex }};">
+              → this week
+            </button>
+            <button
+              type="button"
+              hx-post="/w/{{ workspace.slug }}/inbox/tasks/{{ task.id }}/delete"
+              hx-target="#inbox-main"
+              hx-swap="outerHTML"
+              hx-confirm="Delete '{{ task.title }}'?"
+              aria-label="Delete task"
+              class="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 text-sm leading-none px-1">×</button>
+          </div>
+
+          {# Edit mode (inline form) — same shape as the week-view editor. #}
+          <form
+            x-show="editing"
+            x-cloak
+            x-ref="editForm"
+            hx-post="/w/{{ workspace.slug }}/inbox/tasks/{{ task.id }}/edit"
+            hx-target="#inbox-main"
+            hx-swap="outerHTML"
+            @keydown.escape.prevent="editing = false; $refs.editForm.reset()"
+            class="px-3 py-2.5 bg-slate-50">
+            <input
+              name="title"
+              value="{{ task.title|e }}"
+              required
+              class="w-full px-2 py-1 border border-slate-200 rounded text-[13px] mb-2 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+              placeholder="Task title" />
+            <div class="flex items-center gap-3 flex-wrap text-[12px]">
+              <label class="flex items-center gap-1.5">
+                <span class="text-slate-500">Tags:</span>
+                <input name="tags" value="{{ task.tag_names_str|e }}"
+                       class="px-2 py-0.5 border border-slate-200 rounded font-mono w-44 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+                       placeholder="space-separated" />
+              </label>
+              <label class="flex items-center gap-1.5">
+                <span class="text-slate-500">Project:</span>
+                <input name="project" value="{{ task.project|e if task.project else '' }}"
+                       class="px-2 py-0.5 border border-slate-200 rounded w-36 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+                       placeholder="optional" />
+              </label>
+              <label class="flex items-center gap-1.5">
+                <span class="text-slate-500">Estimate:</span>
+                <input name="estimate" value="{{ task.estimate_label if task.estimate_label else '' }}"
+                       class="px-2 py-0.5 border border-slate-200 rounded font-mono w-16 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+                       placeholder="2h" />
+              </label>
+              <div class="ml-auto flex items-center gap-2">
+                <button type="submit"
+                        class="px-2.5 py-1 bg-slate-900 text-white rounded text-[12px] font-medium hover:bg-slate-800">
+                  Save
+                </button>
+                <button type="button" @click="editing = false; $refs.editForm.reset()"
+                        class="px-2.5 py-1 border border-slate-200 rounded text-[12px] text-slate-600 hover:bg-slate-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      {% else %}
+        <p class="text-[13px] text-slate-400 italic px-1 py-6 text-center">
+          {% if filter_active %}
+            No inbox tasks match this filter.
+          {% else %}
+            Inbox is empty. Type something into the capture bar above.
+          {% endif %}
+        </p>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# --- Stats footer --- #}
+  <div class="flex gap-5 px-4 py-2 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-600">
+    <span>Total <strong class="text-slate-900 font-medium ml-0.5">{{ stats.total }}</strong></span>
+    <span>Open <strong class="text-slate-900 font-medium ml-0.5">{{ stats.open }}</strong></span>
+    <span>Done <strong class="text-slate-900 font-medium ml-0.5">{{ stats.done }}</strong></span>
+  </div>
+</div>
