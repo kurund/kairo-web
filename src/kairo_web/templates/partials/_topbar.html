@@ -13,7 +13,10 @@
      - workspace.slug, year_week (for the Roll-forward button)
 #}
 
+{# Workspace switcher + tabs are grouped on the left so the tab positions
+   stay stable when the week-nav region appears or disappears on the right. #}
 <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 gap-4">
+ <div class="flex items-center gap-3">
   {# --- Workspace switcher --- #}
   <div
     x-data="{ open: false }"
@@ -96,6 +99,7 @@
         style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ week_open_count or '' }}</span>
     </a>
   </nav>
+ </div>
 
   {# --- Week navigation (only on the Week tab) --- #}
   {% if active_tab == 'week' %}
@@ -116,7 +120,10 @@
       </button>
     </div>
   {% else %}
-    {# Spacer keeps the right side balanced when there's no week-nav. #}
-    <span></span>
+    {# No week-nav on the inbox page. The flex parent's justify-between still
+       splits left-cluster vs right-cluster correctly because we put an empty
+       span here, but more importantly the tabs are now anchored to the
+       workspace switcher on the LEFT, so they don't reposition. #}
+    <span aria-hidden="true"></span>
   {% endif %}
 </div>
