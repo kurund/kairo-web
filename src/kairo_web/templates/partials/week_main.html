@@ -162,46 +162,121 @@
       </div>
       <div class="flex flex-col">
         {% for task in week_tasks %}
-          <div class="group grid grid-cols-[18px_1fr_auto_auto_auto_auto] gap-2.5 items-center px-1 py-1.5 border-b border-slate-100 hover:bg-slate-50 {% if task.status == 'completed' %}opacity-60{% endif %}">
-            {{ status_button(task, workspace.color_hex, year_week, workspace.slug) }}
-            <div class="min-w-0">
-              <div class="text-[13px] {% if task.status == 'completed' %}line-through{% endif %}">{{ task.title }}</div>
-              {% if task.tags or task.project %}
-                <div class="flex gap-1.5 mt-0.5 items-center flex-wrap">
-                  {% for tag in task.tags %}{{ tag_pill(tag.name, tag.color) }}{% endfor %}
-                  {% if task.project %}<span class="text-[11px] text-slate-400">@{{ task.project }}</span>{% endif %}
-                </div>
-              {% endif %}
+          <div
+            x-data="{ editing: false }"
+            x-effect="if (editing) $nextTick(() => $el.querySelector('input[name=title]')?.focus())"
+            class="group border-b border-slate-100">
+
+            {# View mode — clicking the title region enters edit mode (Things/Linear convention).
+               Status, today, inbox, and delete buttons keep their own click handlers and are
+               siblings of the title block, so their clicks don't accidentally trigger edit. #}
+            <div x-show="!editing"
+                 class="grid grid-cols-[18px_1fr_auto_auto_auto_auto] gap-2.5 items-center px-1 py-1.5 hover:bg-slate-50 {% if task.status == 'completed' %}opacity-60{% endif %}">
+              {{ status_button(task, workspace.color_hex, year_week, workspace.slug) }}
+              <div
+                @click="editing = true"
+                @keydown.enter.prevent="editing = true"
+                @keydown.space.prevent="editing = true"
+                role="button"
+                tabindex="0"
+                aria-label="Edit task"
+                title="Click to edit"
+                class="min-w-0 cursor-pointer">
+                <div class="text-[13px] {% if task.status == 'completed' %}line-through{% endif %}">{{ task.title }}</div>
+                {% if task.tags or task.project %}
+                  <div class="flex gap-1.5 mt-0.5 items-center flex-wrap">
+                    {% for tag in task.tags %}{{ tag_pill(tag.name, tag.color) }}{% endfor %}
+                    {% if task.project %}<span class="text-[11px] text-slate-400">@{{ task.project }}</span>{% endif %}
+                  </div>
+                {% endif %}
+              </div>
+              <span class="text-[11px] text-slate-400 tabular-nums">{% if task.estimate_hours %}{{ task.estimate_label }}{% endif %}</span>
+              <button
+                type="button"
+                hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/today"
+                hx-target="#week-main"
+                hx-swap="outerHTML"
+                aria-label="{{ 'Remove from today' if task.is_today else 'Add to today' }}"
+                class="text-[10px] font-medium px-1.5 py-0.5 rounded {% if task.is_today %}opacity-100{% else %}opacity-0 group-hover:opacity-60 hover:opacity-100{% endif %}"
+                style="color: {{ workspace.color_hex }};">
+                {% if task.is_today %}★ today{% else %}+ today{% endif %}
+              </button>
+              <button
+                type="button"
+                hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/schedule"
+                hx-target="#week-main"
+                hx-swap="outerHTML"
+                aria-label="Move to inbox"
+                class="text-[10px] font-medium px-1.5 py-0.5 rounded text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-60 hover:opacity-100"
+                title="Move back to inbox (clears today flag)">
+                ↩ inbox
+              </button>
+              <button
+                type="button"
+                hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/delete"
+                hx-target="#week-main"
+                hx-swap="outerHTML"
+                hx-confirm="Delete '{{ task.title }}'?"
+                aria-label="Delete task"
+                class="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 text-sm leading-none px-1">×</button>
             </div>
-            <span class="text-[11px] text-slate-400 tabular-nums">{% if task.estimate_hours %}{{ task.estimate_label }}{% endif %}</span>
-            <button
-              type="button"
-              hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/today"
+
+            {# Edit mode (inline form) #}
+            <form
+              x-show="editing"
+              x-cloak
+              x-ref="editForm"
+              hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/edit"
               hx-target="#week-main"
               hx-swap="outerHTML"
-              aria-label="{{ 'Remove from today' if task.is_today else 'Add to today' }}"
-              class="text-[10px] font-medium px-1.5 py-0.5 rounded {% if task.is_today %}opacity-100{% else %}opacity-0 group-hover:opacity-60 hover:opacity-100{% endif %}"
-              style="color: {{ workspace.color_hex }};">
-              {% if task.is_today %}★ today{% else %}+ today{% endif %}
-            </button>
-            <button
-              type="button"
-              hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/schedule"
-              hx-target="#week-main"
-              hx-swap="outerHTML"
-              aria-label="Move to inbox"
-              class="text-[10px] font-medium px-1.5 py-0.5 rounded text-slate-500 hover:text-slate-900 opacity-0 group-hover:opacity-60 hover:opacity-100"
-              title="Move back to inbox (clears today flag)">
-              ↩ inbox
-            </button>
-            <button
-              type="button"
-              hx-post="/w/{{ workspace.slug }}/week/{{ year_week }}/tasks/{{ task.id }}/delete"
-              hx-target="#week-main"
-              hx-swap="outerHTML"
-              hx-confirm="Delete '{{ task.title }}'?"
-              aria-label="Delete task"
-              class="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 text-sm leading-none px-1">×</button>
+              @keydown.escape.prevent="editing = false; $refs.editForm.reset()"
+              class="px-3 py-2.5 bg-slate-50">
+              <input
+                name="title"
+                value="{{ task.title|e }}"
+                required
+                class="w-full px-2 py-1 border border-slate-200 rounded text-[13px] mb-2 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+                placeholder="Task title" />
+              <div class="flex items-center gap-3 flex-wrap text-[12px]">
+                <label class="flex items-center gap-1.5">
+                  <span class="text-slate-500">Tags:</span>
+                  <input
+                    name="tags"
+                    value="{{ task.tag_names_str|e }}"
+                    class="px-2 py-0.5 border border-slate-200 rounded font-mono w-44 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+                    placeholder="space-separated" />
+                </label>
+                <label class="flex items-center gap-1.5">
+                  <span class="text-slate-500">Project:</span>
+                  <input
+                    name="project"
+                    value="{{ task.project|e if task.project else '' }}"
+                    class="px-2 py-0.5 border border-slate-200 rounded w-36 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+                    placeholder="optional" />
+                </label>
+                <label class="flex items-center gap-1.5">
+                  <span class="text-slate-500">Estimate:</span>
+                  <input
+                    name="estimate"
+                    value="{{ task.estimate_label if task.estimate_label else '' }}"
+                    class="px-2 py-0.5 border border-slate-200 rounded font-mono w-16 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent"
+                    placeholder="2h" />
+                </label>
+                <div class="ml-auto flex items-center gap-2">
+                  <button
+                    type="submit"
+                    class="px-2.5 py-1 bg-slate-900 text-white rounded text-[12px] font-medium hover:bg-slate-800">
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    @click="editing = false; $refs.editForm.reset()"
+                    class="px-2.5 py-1 border border-slate-200 rounded text-[12px] text-slate-600 hover:bg-slate-50">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         {% else %}
           <p class="text-[12px] text-slate-400 italic px-1 py-2">

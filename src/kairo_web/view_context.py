@@ -51,7 +51,12 @@ def workspace_dict(slug: str, name: str, color: str, badge_count: int = 0) -> di
 
 
 def task_to_dict(task: Task) -> dict:
-    """Shape a Task model for the template."""
+    """Shape a Task model for the template.
+
+    `tag_names_str` is the space-joined tag names, used to pre-fill the inline
+    edit form's tags input.
+    """
+    tag_names = [t.name for t in task.tags]
     return {
         "id": task.id,
         "title": task.title,
@@ -60,7 +65,8 @@ def task_to_dict(task: Task) -> dict:
         "project": task.project,
         "estimate_hours": task.estimate_hours,
         "estimate_label": format_hours(task.estimate_hours),
-        "tags": [{"name": t.name, "color": tag_color_for(t.name)} for t in task.tags],
+        "tags": [{"name": n, "color": tag_color_for(n)} for n in tag_names],
+        "tag_names_str": " ".join(tag_names),
     }
 
 

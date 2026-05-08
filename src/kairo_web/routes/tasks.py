@@ -311,6 +311,80 @@ def move_task(
     return _render_partial(request, session, workspace_slug, year_week)
 
 
+_ESTIMATE_RE = re.compile(r"^(\d+(?:\.\d+)?)([hm])$", re.IGNORECASE)
+
+
+def _parse_estimate_text(text: str) -> float | None:
+    """Parse '2h' / '0.5h' / '30m' → hours float. Empty or unparseable → None."""
+    text = text.strip().lower()
+    if not text:
+        return None
+    m = _ESTIMATE_RE.match(text)
+    if not m:
+        return None
+    value = float(m.group(1))
+    return value if m.group(2) == "h" else value / 60.0
+
+
+@router.post(
+    "/w/{workspace_slug}/week/{year_week}/tasks/{task_id}/edit",
+    response_class=HTMLResponse,
+)
+def edit_task(
+    request: Request,
+    workspace_slug: str,
+    year_week: str,
+    task_id: int,
+    title: str = Form(""),
+    tags: str = Form(""),
+    project: str = Form(""),
+    estimate: str = Form(""),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Update a task's title, tags, project, and estimate in one POST.
+
+    Tag input is whitespace-separated names; existing TaskTag rows are
+    replaced wholesale with the new set (find-or-create per name).
+    Empty title is silently ignored — HTML5 `required` already gates this
+    on the client; server-side check is defense in depth.
+    """
+    workspace = queries.get_workspace(session, workspace_slug)
+    if workspace is None or workspace.id is None:
+        raise HTTPException(status_code=404, detail="workspace not found")
+    task = _get_task_for_workspace(session, task_id, workspace.id)
+
+    title_clean = title.strip()
+    if not title_clean:
+        # Refuse: an empty title would orphan the task. Re-render unchanged.
+        return _render_partial(request, session, workspace_slug, year_week)
+
+    task.title = title_clean
+    task.project = project.strip() or None
+    task.estimate_hours = _parse_estimate_text(estimate)
+
+    # Reconcile tag links: drop existing, insert new. Tag names are lowercased
+    # and validated (invalid characters → silently dropped, matching capture parser).
+    new_names: list[str] = []
+    for raw in tags.split():
+        name = raw.strip().lstrip("#").lower()
+        if not name:
+            continue
+        # Mirror the capture parser's _WORD_RE — alphanumerics, underscore, hyphen.
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", name):
+            continue
+        if name not in new_names:
+            new_names.append(name)
+
+    session.exec(delete(TaskTag).where(TaskTag.task_id == task.id))  # type: ignore[arg-type]
+    for tag in _ensure_tags(session, workspace.id, new_names):
+        assert tag.id is not None
+        session.add(TaskTag(task_id=task.id, tag_id=tag.id))
+
+    session.add(task)
+    session.commit()
+    return _render_partial(request, session, workspace_slug, year_week)
+
+
 @router.post(
     "/w/{workspace_slug}/week/{year_week}/rollover",
     response_class=HTMLResponse,
