@@ -173,7 +173,7 @@ def get_workspace_badges(
 
 
 def count_inbox_tasks(session: Session, workspace_id: int) -> int:
-    """Total inbox count (unfiltered, all statuses) — drives the 'Inbox · N' tab badge."""
+    """Total inbox count (all statuses) — used by the inbox stats footer."""
     return len(
         list(
             session.exec(
@@ -181,6 +181,40 @@ def count_inbox_tasks(session: Session, workspace_id: int) -> int:
                     Task.workspace_id == workspace_id,
                     Task.iso_year.is_(None),
                     Task.iso_week.is_(None),
+                )
+            ).all()
+        )
+    )
+
+
+def count_open_inbox_tasks(session: Session, workspace_id: int) -> int:
+    """Open-task count in the workspace inbox. Drives the 'Inbox · N' tab badge."""
+    return len(
+        list(
+            session.exec(
+                select(Task.id).where(
+                    Task.workspace_id == workspace_id,
+                    Task.iso_year.is_(None),
+                    Task.iso_week.is_(None),
+                    Task.status == "open",
+                )
+            ).all()
+        )
+    )
+
+
+def count_open_week_tasks(
+    session: Session, workspace_id: int, iso_year: int, iso_week: int
+) -> int:
+    """Open-task count in a specific ISO week. Drives the 'Week · N' tab badge."""
+    return len(
+        list(
+            session.exec(
+                select(Task.id).where(
+                    Task.workspace_id == workspace_id,
+                    Task.iso_year == iso_year,
+                    Task.iso_week == iso_week,
+                    Task.status == "open",
                 )
             ).all()
         )

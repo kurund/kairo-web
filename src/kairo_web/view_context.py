@@ -171,7 +171,13 @@ def build_week_context(
         for p in available_projects
     ]
 
-    inbox_count = queries.count_inbox_tasks(session, workspace.id)
+    # Tab badges show open-task counts. Inbox is workspace-scoped; week badge
+    # always reflects the *current* ISO week (not the viewed one) so the tab
+    # is a stable "what's pending right now" signal even when browsing past weeks.
+    inbox_open_count = queries.count_open_inbox_tasks(session, workspace.id)
+    week_open_count = queries.count_open_week_tasks(
+        session, workspace.id, today_year, today_week
+    )
 
     return {
         "workspace": workspace_dict(workspace.slug, workspace.name, workspace.color),
@@ -193,7 +199,8 @@ def build_week_context(
         "week_tasks": filtered_dicts,
         "week_total_count": len(all_week_task_dicts),
         "inbox_tasks": [{"id": t.id, "title": t.title} for t in inbox_tasks],
-        "inbox_count": inbox_count,
+        "inbox_count": inbox_open_count,
+        "week_open_count": week_open_count,
         "stats": {
             "open": open_count,
             "done": done_count,
@@ -254,6 +261,7 @@ def build_inbox_context(
     assert workspace.id is not None
 
     inbox_total = queries.count_inbox_tasks(session, workspace.id)
+    inbox_open_count = queries.count_open_inbox_tasks(session, workspace.id)
     inbox_tasks = queries.get_inbox_tasks(
         session,
         workspace.id,
@@ -265,6 +273,9 @@ def build_inbox_context(
 
     all_workspaces = queries.list_workspaces(session)
     today_year, today_week = get_current_iso_week()
+    week_open_count = queries.count_open_week_tasks(
+        session, workspace.id, today_year, today_week
+    )
 
     open_count = sum(1 for t in inbox_dicts if t["status"] == "open")
     done_count = sum(1 for t in inbox_dicts if t["status"] == "completed")
@@ -307,13 +318,14 @@ def build_inbox_context(
         "workspaces": [
             workspace_dict(
                 w.slug, w.name, w.color,
-                queries.count_inbox_tasks(session, w.id) if w.id is not None else 0,
+                queries.count_open_inbox_tasks(session, w.id) if w.id is not None else 0,
             )
             for w in all_workspaces
         ],
         "inbox_tasks": inbox_dicts,
-        "inbox_total": inbox_total,
-        "inbox_count": inbox_total,  # for the active workspace's tab badge
+        "inbox_total": inbox_total,           # used by the inbox stats footer
+        "inbox_count": inbox_open_count,      # open-only — drives the tab badge
+        "week_open_count": week_open_count,   # current-ISO-week open count for the Week tab
         "stats": {
             "open": open_count,
             "done": done_count,

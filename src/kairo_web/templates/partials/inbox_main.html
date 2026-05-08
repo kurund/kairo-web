@@ -251,3 +251,5 @@
     <span>Done <strong class="text-slate-900 font-medium ml-0.5">{{ stats.done }}</strong></span>
   </div>
 </div>
+
+{% if is_partial_response %}{% include "partials/_tab_badges_oob.html" %}{% endif %}

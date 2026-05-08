@@ -1,0 +1,15 @@
+{# Out-of-band swap for the Inbox + Week tab badges in the topbar.
+   Included at the bottom of week_main.html and inbox_main.html so every
+   mutation partial keeps the topbar in sync without a page refresh. #}
+
+<span
+  id="inbox-tab-badge"
+  hx-swap-oob="true"
+  class="text-[11px] font-medium px-1.5 py-px rounded-full {% if not inbox_count %}hidden{% endif %}"
+  style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ inbox_count or '' }}</span>
+
+<span
+  id="week-tab-badge"
+  hx-swap-oob="true"
+  class="text-[11px] font-medium px-1.5 py-px rounded-full {% if not week_open_count %}hidden{% endif %}"
+  style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ week_open_count or '' }}</span>

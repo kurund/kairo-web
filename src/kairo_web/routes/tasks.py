@@ -67,6 +67,7 @@ def _render_partial(
         session, workspace_slug, iso_year, iso_week,
         filter_tag=filter_tag, filter_project=filter_project,
     )
+    ctx["is_partial_response"] = True  # enables OOB tab-badge swaps in the partial
     return templates.TemplateResponse(request, "partials/week_main.html", ctx)
 
 
@@ -85,6 +86,7 @@ def _render_inbox_partial(
         session, workspace_slug,
         filter_tag=filter_tag, filter_project=filter_project, sort=sort,
     )
+    ctx["is_partial_response"] = True  # enables OOB tab-badge swaps in the partial
     return templates.TemplateResponse(request, "partials/inbox_main.html", ctx)
 
 

@@ -300,3 +300,8 @@
     <span class="ml-auto text-slate-400">{{ stats.percent_complete }}% complete</span>
   </div>
 </div>
+
+{# The OOB tab-badge swaps only belong in mutation responses (HTMX picks them
+   up and swaps them into the topbar). On initial page render they would just
+   render visibly at the bottom of the page, so we gate them. #}
+{% if is_partial_response %}{% include "partials/_tab_badges_oob.html" %}{% endif %}

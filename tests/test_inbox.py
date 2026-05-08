@@ -93,15 +93,179 @@ def test_week_view_no_longer_renders_inbox_sidebar(client: TestClient) -> None:
 
 
 def test_inbox_count_appears_in_tab_badge(client: TestClient) -> None:
-    """Tab badge should reflect the inbox count."""
+    """Tab badge should reflect the inbox open count."""
     with Session(engine) as s:
         for i in range(3):
             s.add(Task(workspace_id=_ws_id(), title=f"item{i}", position=i))
         s.commit()
     r = client.get("/w/personal/week/2026-W19")
     # Look for the badge "3" next to the Inbox tab.
-    # The number is rendered in a span with rounded-full styling; just check ">3<" appears.
     assert ">3<" in r.text
+
+
+def test_inbox_tab_badge_excludes_completed(client: TestClient) -> None:
+    """Tab badge counts open tasks only — completed inbox items don't bloat it."""
+    with Session(engine) as s:
+        s.add(Task(workspace_id=_ws_id(), title="open1", position=1))
+        s.add(Task(workspace_id=_ws_id(), title="open2", position=2))
+        s.add(Task(workspace_id=_ws_id(), title="done", position=3, status="completed"))
+        s.commit()
+    r = client.get("/w/personal/week/2026-W19")
+    # 2 open inbox tasks → badge shows 2, not 3.
+    assert ">2<" in r.text
+    assert ">3<" not in r.text
+
+
+def test_week_tab_badge_shows_open_count(client: TestClient) -> None:
+    """Week tab gets a count of open tasks in the *current* ISO week."""
+    cy, cw = get_current_iso_week()
+    with Session(engine) as s:
+        s.add(Task(workspace_id=_ws_id(), title="open1",
+                   iso_year=cy, iso_week=cw, position=1))
+        s.add(Task(workspace_id=_ws_id(), title="open2",
+                   iso_year=cy, iso_week=cw, position=2))
+        s.add(Task(workspace_id=_ws_id(), title="done",
+                   iso_year=cy, iso_week=cw, position=3, status="completed"))
+        s.commit()
+
+    # On the inbox page, the Week tab still shows the badge.
+    r_inbox = client.get("/w/personal/inbox")
+    assert ">2<" in r_inbox.text
+
+    # On the week page (current week), same.
+    r_week = client.get(f"/w/personal/week/{cy}-W{cw:02d}")
+    assert ">2<" in r_week.text
+
+
+def test_week_tab_badge_uses_current_not_viewed_week(client: TestClient) -> None:
+    """Even when browsing a past week with tasks, the badge reflects the *current* week."""
+    cy, cw = get_current_iso_week()
+    with Session(engine) as s:
+        # 5 open in current week (drives the badge).
+        for i in range(5):
+            s.add(Task(workspace_id=_ws_id(), title=f"now{i}",
+                       iso_year=cy, iso_week=cw, position=i))
+        # 0 in some past week we view.
+        s.commit()
+
+    r = client.get("/w/personal/week/2026-W01")  # arbitrary past week
+    # Badge should show 5, regardless of which week the user is viewing.
+    assert ">5<" in r.text
+
+
+def test_no_tab_badge_when_count_is_zero(client: TestClient) -> None:
+    """Tab badges hide (display:none via Tailwind 'hidden' class) when count is 0.
+
+    The badge spans always render so HTMX OOB swaps have stable id targets,
+    but they get the `hidden` class when their count is zero.
+    """
+    r = client.get("/w/personal/week/2026-W19")
+    topbar = r.text.split('placeholder="', 1)[0]
+    # Badge spans exist (with stable ids) but are hidden.
+    assert 'id="inbox-tab-badge"' in topbar
+    assert 'id="week-tab-badge"' in topbar
+    # Both should have the `hidden` class when zero.
+    inbox_badge_block = topbar.split('id="inbox-tab-badge"')[1].split("</span>")[0]
+    week_badge_block = topbar.split('id="week-tab-badge"')[1].split("</span>")[0]
+    assert "hidden" in inbox_badge_block
+    assert "hidden" in week_badge_block
+
+
+def test_workspace_dropdown_has_no_count_badges(client: TestClient) -> None:
+    """The workspace switcher pill + dropdown menu items render without numeric badges."""
+    # Seed two workspaces with tasks so badges WOULD have shown up under the old design.
+    cy, cw = get_current_iso_week()
+    with Session(engine) as s:
+        s.add(Workspace(slug="work", name="Work", color="#0F766E"))
+        s.commit()
+        for i in range(3):
+            s.add(Task(workspace_id=_ws_id(), title=f"p{i}",
+                       iso_year=cy, iso_week=cw, position=i))
+        ws_work = s.exec(select(Workspace).where(Workspace.slug == "work")).first()
+        for i in range(2):
+            s.add(Task(workspace_id=ws_work.id, title=f"w{i}",
+                       iso_year=cy, iso_week=cw, position=i))
+        s.commit()
+
+    r = client.get(f"/w/personal/week/{cy}-W{cw:02d}")
+    # Find the dropdown region (between the dropdown's Alpine x-show and the tab nav).
+    # A simpler check: the workspaces list rendered as `role="menuitem"` links should
+    # not contain badge count spans for those workspaces. We verify by ensuring no
+    # rounded-full pill element appears inside any role="menuitem" anchor.
+    dropdown_section = r.text.split('role="menu"', 1)[1].split("</nav>", 1)[0]
+    # Tags pills also use rounded-full; a simpler signal — no occurrence of '>3<'
+    # or '>2<' inside a menuitem anchor.
+    menuitem_blobs = []
+    rest = dropdown_section
+    while 'role="menuitem"' in rest:
+        rest = rest.split('role="menuitem"', 1)[1]
+        blob = rest.split("</a>", 1)[0]
+        menuitem_blobs.append(blob)
+    for blob in menuitem_blobs:
+        assert ">3<" not in blob, "Personal's task count should not appear in the dropdown"
+        assert ">2<" not in blob, "Work's task count should not appear in the dropdown"
+
+
+def test_mutation_response_includes_oob_tab_badge_swaps(client: TestClient) -> None:
+    """Every mutation partial must include hx-swap-oob spans for the tab badges
+    so the topbar updates in place without a refresh."""
+    cy, cw = get_current_iso_week()
+    # Capture into the inbox so a complete-toggle target exists.
+    client.post("/w/personal/inbox/tasks", data={"capture_text": "x"})
+    with Session(engine) as s:
+        tid = s.exec(select(Task)).first().id
+
+    r = client.post(f"/w/personal/inbox/tasks/{tid}/complete")
+    assert r.status_code == 200
+    # Mutation response carries OOB fragments.
+    assert 'hx-swap-oob="true"' in r.text
+    assert r.text.count('hx-swap-oob="true"') >= 2
+
+
+def test_full_page_render_does_not_include_oob_swaps(client: TestClient) -> None:
+    """Initial page render (GET) must not emit OOB elements — they'd render visibly.
+
+    OOB belongs only in mutation responses; the topbar already renders the
+    canonical badge spans at the top.
+    """
+    for url in ["/w/personal/week/2026-W19", "/w/personal/inbox"]:
+        r = client.get(url)
+        assert r.status_code == 200
+        # Topbar renders one inbox-tab-badge and one week-tab-badge — that's it.
+        assert r.text.count('id="inbox-tab-badge"') == 1
+        assert r.text.count('id="week-tab-badge"') == 1
+        # No hx-swap-oob anywhere on initial render.
+        assert "hx-swap-oob" not in r.text
+
+
+def _badge_block(html: str, badge_id: str) -> str:
+    """Return the full <span id='badge_id' …>…</span> element as a substring."""
+    start = html.find(f'id="{badge_id}"')
+    assert start != -1, f"badge {badge_id} not found in HTML"
+    end = html.find("</span>", start) + len("</span>")
+    # Walk back to the opening `<` to capture the full element.
+    open_pos = html.rfind("<span", 0, start)
+    return html[open_pos:end]
+
+
+def test_complete_decrements_inbox_tab_badge_via_oob(client: TestClient) -> None:
+    """The OOB span returned by /inbox/.../complete should reflect the new open count."""
+    with Session(engine) as s:
+        # Two open inbox tasks.
+        s.add(Task(workspace_id=_ws_id(), title="a", position=1))
+        s.add(Task(workspace_id=_ws_id(), title="b", position=2))
+        s.commit()
+        first_id = s.exec(select(Task).where(Task.title == "a")).first().id
+
+    # Initial page → badge shows 2.
+    r0 = client.get("/w/personal/inbox")
+    assert ">2</span>" in _badge_block(r0.text, "inbox-tab-badge")
+
+    # Complete one → OOB fragment should now contain 1.
+    r1 = client.post(f"/w/personal/inbox/tasks/{first_id}/complete")
+    oob = _badge_block(r1.text, "inbox-tab-badge")
+    assert ">1</span>" in oob
+    assert 'hx-swap-oob="true"' in oob
 
 
 # ----- POST /inbox/tasks (create) -----------------------------------------

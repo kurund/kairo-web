@@ -29,9 +29,6 @@
       :class="open && 'bg-slate-50'"
       style="border-color: {{ workspace.color_hex }};">
       <span class="text-[13px] font-medium text-slate-900">{{ workspace.name }}</span>
-      {% if workspace.badge_count %}
-        <span class="text-[11px] font-medium px-1.5 py-px rounded-full" style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ workspace.badge_count }}</span>
-      {% endif %}
       <svg class="w-3 h-3 text-slate-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
       </svg>
@@ -50,9 +47,6 @@
           class="flex items-center gap-2.5 px-3 py-1.5 text-[13px] hover:bg-slate-50 {% if ws.slug == workspace.slug %}bg-slate-50{% endif %}">
           <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {{ ws.color_hex }};"></span>
           <span class="flex-1 truncate {% if ws.slug == workspace.slug %}font-medium text-slate-900{% else %}text-slate-700{% endif %}">{{ ws.name }}</span>
-          {% if ws.badge_count %}
-            <span class="text-[10px] font-medium px-1.5 py-px rounded-full" style="background: {{ ws.color_bg }}; color: {{ ws.color_fg }};">{{ ws.badge_count }}</span>
-          {% endif %}
           {% if ws.slug == workspace.slug %}
             <svg class="w-3 h-3 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
           {% endif %}
@@ -80,19 +74,26 @@
              {% if active_tab == 'inbox' %}font-medium text-slate-900{% else %}text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-50 rounded{% endif %}"
       {% if active_tab == 'inbox' %}style="border-color: {{ workspace.color_hex }};"{% endif %}>
       <span>Inbox</span>
-      {% if inbox_count %}
-        <span class="text-[11px] font-medium px-1.5 py-px rounded-full"
-              style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ inbox_count }}</span>
-      {% endif %}
+      {# Always render the badge span (with stable id) so HTMX OOB swaps can target it.
+         When the count is 0 the `hidden` class collapses it; the OOB fragment in
+         the mutation partial replaces this element wholesale on every change. #}
+      <span
+        id="inbox-tab-badge"
+        class="text-[11px] font-medium px-1.5 py-px rounded-full {% if not inbox_count %}hidden{% endif %}"
+        style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ inbox_count or '' }}</span>
     </a>
     <a
       href="{{ week_url_for_tab }}"
       role="tab"
       aria-selected="{{ 'true' if active_tab == 'week' else 'false' }}"
-      class="px-2.5 py-1.5 text-[13px] border-b-2 -mb-px
+      class="px-2.5 py-1.5 text-[13px] inline-flex items-center gap-1.5 border-b-2 -mb-px
              {% if active_tab == 'week' %}font-medium text-slate-900{% else %}text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-50 rounded{% endif %}"
       {% if active_tab == 'week' %}style="border-color: {{ workspace.color_hex }};"{% endif %}>
-      Week
+      <span>Week</span>
+      <span
+        id="week-tab-badge"
+        class="text-[11px] font-medium px-1.5 py-px rounded-full {% if not week_open_count %}hidden{% endif %}"
+        style="background: {{ workspace.color_bg }}; color: {{ workspace.color_fg }};">{{ week_open_count or '' }}</span>
     </a>
   </nav>
 
