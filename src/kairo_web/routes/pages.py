@@ -15,7 +15,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from kairo_web.db import get_session
 from kairo_web.models import Task
@@ -38,9 +38,10 @@ def _week_url(slug: str, year: int, week: int) -> str:
 router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
-# Default landing workspace until real auth + active-workspace session lands.
-# Created by `kairo-web init`. Users add more workspaces via `kairo-web add-workspace`.
-_DEFAULT_WORKSPACE_SLUG = "personal"
+# Hardcoded fallback used only when the DB has no workspaces at all (e.g. a
+# fresh install before `kairo-web init`). Once init runs, the seeded workspace
+# is marked is_default=True and `_default_workspace_slug()` returns it.
+_FALLBACK_WORKSPACE_SLUG = "personal"
 
 _WEEK_PATH_RE = re.compile(r"^(\d{4})-W(\d{1,2})$")
 
@@ -62,11 +63,28 @@ def login_post(request: Request) -> HTMLResponse:
 # ----- Root: redirect to current week ---------------------------------------
 
 
+def _default_workspace_slug(session: Session) -> str:
+    """Pick the default workspace slug. Order of preference:
+
+    1. The workspace where `is_default = true`
+    2. The first workspace by id (lowest)
+    3. The hardcoded fallback (only if the DB is completely empty)
+    """
+    from kairo_web.models import Workspace
+    ws = session.exec(
+        select(Workspace).where(Workspace.is_default == True).order_by(Workspace.id)  # noqa: E712
+    ).first()
+    if ws is None:
+        ws = session.exec(select(Workspace).order_by(Workspace.id)).first()
+    return ws.slug if ws else _FALLBACK_WORKSPACE_SLUG  # type: ignore[no-any-return]
+
+
 @router.get("/", include_in_schema=False)
-def root() -> RedirectResponse:
+def root(session: Session = Depends(get_session)) -> RedirectResponse:
     iso_year, iso_week = get_current_iso_week()
+    slug = _default_workspace_slug(session)
     return RedirectResponse(
-        url=f"/w/{_DEFAULT_WORKSPACE_SLUG}/week/{iso_year}-W{iso_week:02d}",
+        url=f"/w/{slug}/week/{iso_year}-W{iso_week:02d}",
         status_code=302,
     )
 

@@ -36,7 +36,7 @@ def fresh_db() -> Iterator[None]:
     with Session(engine) as session:
         session.add(Workspace(slug="fulltime", name="Full-time", color="#0F766E"))
         session.add(Workspace(slug="consulting", name="Consulting", color="#4338CA"))
-        session.add(Workspace(slug="personal", name="Personal", color="#BE185D"))
+        session.add(Workspace(slug="personal", name="Personal", color="#BE185D", is_default=True))
         session.commit()
     yield
 

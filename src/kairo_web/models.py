@@ -50,6 +50,8 @@ class Workspace(SQLModel, table=True):
     name: str
     color: str  # hex, used in UI accents
 
+    is_default: bool = Field(default=False)  # Exactly one row should be true; root '/' uses it.
+
     morning_digest_enabled: bool = Field(default=True)
     morning_digest_time: str = Field(default="07:00")  # HH:MM, local
     evening_digest_enabled: bool = Field(default=True)

@@ -53,8 +53,8 @@ def init() -> None:
         if existing:
             click.echo(f"workspace '{slug}' already exists — skipping")
         else:
-            session.add(Workspace(slug=slug, name=name, color=color))
-            click.echo(f"created workspace '{slug}' ({name})")
+            session.add(Workspace(slug=slug, name=name, color=color, is_default=True))
+            click.echo(f"created workspace '{slug}' ({name}) — marked as default")
 
         owner = session.exec(select(User).where(User.email == settings.KAIRO_OWNER_EMAIL)).first()
         if owner:

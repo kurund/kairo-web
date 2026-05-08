@@ -110,26 +110,47 @@
     <ul class="divide-y divide-slate-100">
       {% for ws in workspaces %}
         <li
-          x-data="{ editing: false, name: '{{ ws.name|e }}', color: '{{ ws.color_hex }}' }"
+          x-data="{ editing: false, deleting: false, name: '{{ ws.name|e }}', color: '{{ ws.color_hex }}', confirm: '' }"
           class="px-5 py-3">
 
           {# View mode #}
-          <div x-show="!editing" class="flex items-center gap-3">
+          <div x-show="!editing && !deleting" class="flex items-center gap-3 flex-wrap">
             <span class="w-3 h-3 rounded-full flex-shrink-0" style="background: {{ ws.color_hex }};"></span>
-            <span class="flex-1 min-w-0 flex items-baseline gap-3">
+            <span class="flex-1 min-w-0 flex items-baseline gap-3 flex-wrap">
               <span class="font-medium text-[14px]">{{ ws.name }}</span>
               <span class="font-mono text-[11px] text-slate-400">{{ ws.slug }}</span>
               <span class="font-mono text-[11px] text-slate-400">{{ ws.color_hex }}</span>
+              {% if ws.is_default %}
+                <span class="text-[10px] font-medium px-1.5 py-0.5 bg-slate-900 text-white rounded">Default</span>
+              {% endif %}
             </span>
             <a
               href="/w/{{ ws.slug }}/week/{{ current_year_week }}"
               class="text-[12px] text-slate-500 hover:text-slate-900">Open →</a>
+            {% if not ws.is_default %}
+              <form method="post" action="/settings/workspaces/{{ ws.slug }}/default" class="inline">
+                <button
+                  type="submit"
+                  class="text-[12px] text-slate-500 hover:text-slate-900 px-2 py-0.5 border border-slate-200 rounded hover:bg-slate-50"
+                  title="Make this the workspace shown when you open Kairo">
+                  Set as default
+                </button>
+              </form>
+            {% endif %}
             <button
               @click="editing = true"
               type="button"
               class="text-[12px] text-slate-500 hover:text-slate-900 px-2 py-0.5 border border-slate-200 rounded hover:bg-slate-50">
               Edit
             </button>
+            {% if not ws.is_default %}
+              <button
+                @click="deleting = true; confirm = ''"
+                type="button"
+                class="text-[12px] text-red-700 hover:text-red-900 px-2 py-0.5 border border-red-200 rounded hover:bg-red-50">
+                Delete
+              </button>
+            {% endif %}
           </div>
 
           {# Edit mode (inline form) #}
@@ -189,6 +210,48 @@
               Slug <code class="font-mono">{{ ws.slug }}</code> can't be changed — it appears in URLs and bookmarks.
             </p>
           </form>
+
+          {# Delete-confirmation panel — omitted server-side for default workspace
+             so the form action URL never appears for it (the route would refuse
+             anyway, but rendering the form leaks the intent). #}
+          {% if not ws.is_default %}
+          <form
+            x-show="deleting"
+            x-cloak
+            method="post"
+            action="/settings/workspaces/{{ ws.slug }}/delete"
+            class="bg-red-50 border border-red-200 rounded-md p-3 -mx-1">
+            <p class="text-[13px] text-red-900 mb-2">
+              Delete <strong>{{ ws.name }}</strong>? This will permanently remove the
+              workspace and <em>all</em> of its tasks and tags. This cannot be undone.
+            </p>
+            <p class="text-[12px] text-red-800 mb-1.5">
+              To confirm, type the slug <code class="font-mono bg-white px-1 rounded border border-red-200">{{ ws.slug }}</code>:
+            </p>
+            <div class="flex items-center gap-2">
+              <input
+                type="text"
+                name="confirm_slug"
+                x-model="confirm"
+                autocomplete="off"
+                class="px-2 py-1 border border-red-200 bg-white rounded text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent"
+                placeholder="{{ ws.slug }}" />
+              <button
+                type="submit"
+                :disabled="confirm !== '{{ ws.slug }}'"
+                :class="confirm === '{{ ws.slug }}' ? 'bg-red-700 hover:bg-red-800' : 'bg-red-300 cursor-not-allowed'"
+                class="px-2.5 py-1 text-white rounded text-[12px] font-medium transition">
+                Delete forever
+              </button>
+              <button
+                type="button"
+                @click="deleting = false; confirm = ''"
+                class="px-2.5 py-1 border border-red-200 bg-white rounded text-[12px] text-red-800 hover:bg-red-50">
+                Cancel
+              </button>
+            </div>
+          </form>
+          {% endif %}
         </li>
       {% else %}
         <li class="px-5 py-6 text-center text-[13px] text-slate-400 italic">
