@@ -20,6 +20,7 @@ from urllib.parse import urlencode
 from fastapi import HTTPException
 from sqlmodel import Session
 
+from kairo_web import __version__
 from kairo_web.models import Task
 from kairo_web.request_filters import filter_query_string
 from kairo_web.services import queries
@@ -232,6 +233,7 @@ def build_week_context(
         "primary_destination": "week",  # Enter on the week page schedules into the viewed week.
         "main_target_id": "week-main",
         "capture_placeholder": "Capture — Enter adds to this week · supports #tag @project ~Nh",
+        "app_version": __version__,
     }
 
 
@@ -356,4 +358,5 @@ def build_inbox_context(
         "primary_destination": "inbox",  # Enter on the inbox page captures to inbox.
         "main_target_id": "inbox-main",
         "capture_placeholder": "Capture — Enter adds to inbox · supports #tag @project ~Nh",
+        "app_version": __version__,
     }

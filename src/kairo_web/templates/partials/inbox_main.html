@@ -212,6 +212,9 @@
     <span>Open <strong class="text-slate-900 font-medium ml-0.5">{{ stats.open }}</strong></span>
     <span>Done <strong class="text-slate-900 font-medium ml-0.5">{{ stats.done }}</strong></span>
   </div>
+  <div class="flex px-4 py-1 border-t border-slate-200 bg-slate-50 text-[10px] text-slate-400">
+    <span class="ml-auto">v{{ app_version }}</span>
+  </div>
 </div>
 
 {% if is_partial_response %}{% include "partials/_tab_badges_oob.html" %}{% endif %}
